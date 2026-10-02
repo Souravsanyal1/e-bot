@@ -18,12 +18,14 @@ import {
 import type { AdminStats, Task } from '../types';
 
 interface AdminTabProps {
+  adminEmail?: string;
   onExit?: () => void;
+  onSignOut?: () => void;
 }
 
 type AdminSection = 'overview' | 'users' | 'tasks' | 'broadcast';
 
-export const AdminTab: React.FC<AdminTabProps> = ({ onExit }) => {
+export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOut }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
   const [stats, setStats] = useState<AdminStats>({
     totalUsers: 0,
@@ -215,6 +217,13 @@ export const AdminTab: React.FC<AdminTabProps> = ({ onExit }) => {
         </div>
 
         <div className="flex items-center gap-3">
+          {adminEmail && (
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-gray-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className="font-mono text-[11px] text-orange-200">{adminEmail}</span>
+            </div>
+          )}
+
           <button
             onClick={loadData}
             disabled={loading}
@@ -231,6 +240,15 @@ export const AdminTab: React.FC<AdminTabProps> = ({ onExit }) => {
             >
               <ArrowLeft size={14} />
               <span>Back to App</span>
+            </button>
+          )}
+
+          {onSignOut && (
+            <button
+              onClick={onSignOut}
+              className="px-3 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-xs font-bold text-red-300 transition-all"
+            >
+              Sign Out
             </button>
           )}
         </div>

@@ -8,6 +8,7 @@ import { TasksTab } from './components/TasksTab';
 import { FriendsTab } from './components/FriendsTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
 import { AdminTab } from './components/AdminTab';
+import { AdminLogin } from './components/AdminLogin';
 import { 
   syncUserFirestore, 
   startMiningFirestore, 
@@ -30,6 +31,28 @@ export const App: React.FC = () => {
   const [referrals, setReferrals] = useState<ReferralData | null>(null);
   const [topMiners, setTopMiners] = useState<LeaderboardUser[]>([]);
 
+  // Admin authentication state using Gmail & Password / Session
+  const [adminAuthenticated, setAdminAuthenticated] = useState<boolean>(() => {
+    try {
+      const session = localStorage.getItem('eforce_admin_session');
+      return Boolean(session);
+    } catch {
+      return false;
+    }
+  });
+
+  const [adminEmail, setAdminEmail] = useState<string>(() => {
+    try {
+      const session = localStorage.getItem('eforce_admin_session');
+      if (session) {
+        return JSON.parse(session).email || '';
+      }
+      return '';
+    } catch {
+      return '';
+    }
+  });
+
   // Initialize Telegram & Sync Profile with Cloud Firestore
   useEffect(() => {
     tg.init();
@@ -43,18 +66,13 @@ export const App: React.FC = () => {
       if (!isNaN(parsed)) referrerId = parsed;
     }
 
-    // Optional private admin access strictly protected by PIN
+    // Check if accessing admin route
     const hasAdminParam = searchParams.get('admin') === 'true' || window.location.hash.includes('admin');
-    let isPrivilegedAdmin = false;
     if (hasAdminParam) {
-      const pin = prompt('Enter Admin Security PIN:');
-      if (pin === 'eforce2026') {
-        isPrivilegedAdmin = true;
-        setCurrentTab('admin');
-      }
+      setCurrentTab('admin');
     }
 
-    syncUserData(referrerId, isPrivilegedAdmin);
+    syncUserData(referrerId);
   }, []);
 
   const syncUserData = async (refId?: number, forceAdmin?: boolean) => {
@@ -153,7 +171,29 @@ export const App: React.FC = () => {
 
   // Full Desktop Command Center View for Admin
   if (currentTab === 'admin') {
-    return <AdminTab onExit={() => setCurrentTab('mining')} />;
+    if (!adminAuthenticated) {
+      return (
+        <AdminLogin
+          onSuccess={(email) => {
+            setAdminEmail(email);
+            setAdminAuthenticated(true);
+          }}
+          onExit={() => setCurrentTab('mining')}
+        />
+      );
+    }
+
+    return (
+      <AdminTab
+        adminEmail={adminEmail}
+        onExit={() => setCurrentTab('mining')}
+        onSignOut={() => {
+          localStorage.removeItem('eforce_admin_session');
+          setAdminAuthenticated(false);
+          setAdminEmail('');
+        }}
+      />
+    );
   }
 
   return (
