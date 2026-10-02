@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, Plus, Trash2, Send, Users, 
-  Coins, CheckSquare, Zap, Search
+  Coins, CheckSquare, Zap, Search, Link2, Check
 } from 'lucide-react';
 import type { AdminStats, Task } from '../types';
-import { api } from '../services/api';
+import { api, getApiBaseUrl } from '../services/api';
 import { tg } from '../services/telegram';
 
 export const AdminTab: React.FC = () => {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [serverUrl, setServerUrl] = useState(getApiBaseUrl());
+  const [urlSaved, setUrlSaved] = useState(false);
 
   // New Task Form State
   const [isCreatingTask, setIsCreatingTask] = useState(false);
@@ -32,6 +34,14 @@ export const AdminTab: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [userList, setUserList] = useState<any[]>([]);
 
+  const handleSaveServerUrl = () => {
+    localStorage.setItem('eforce_api_url', serverUrl);
+    setUrlSaved(true);
+    tg.haptic.notification('success');
+    loadData();
+    setTimeout(() => setUrlSaved(false), 2000);
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -45,19 +55,15 @@ export const AdminTab: React.FC = () => {
       setStats(statsData);
       setTasks(tasksData);
     } catch (e: any) {
-      console.warn('Admin load error, using local fallback:', e);
+      console.warn('Admin load error:', e);
       setStats({
-        totalUsers: 1420,
-        totalMinedTokens: 38942.5,
-        activeTasks: 5,
-        completedTasks: 4210,
-        totalReferrals: 875,
+        totalUsers: 0,
+        totalMinedTokens: 0.0,
+        activeTasks: 0,
+        completedTasks: 0,
+        totalReferrals: 0,
       });
-      setTasks([
-        { id: 1, title: 'Watch Sponsored E-FORCE Ad', description: 'Watch a fast sponsor video ad to boost your mining engine rate permanently!', reward_coins: 25, speed_boost: 0.10, task_type: 'standard', action_type: 'ad', link: '', ad_required: true, wait_time_sec: 15 },
-        { id: 2, title: 'Join Official Telegram Channel', description: 'Subscribe to the official announcement channel for critical airdrop news.', reward_coins: 50, speed_boost: 0.15, task_type: 'standard', action_type: 'telegram', link: 'https://t.me/telegram', ad_required: false, wait_time_sec: 5 },
-        { id: 3, title: '🔥 SPECIAL: Supercharge Core with Video Partner', description: 'Watch our special partner video showcase and unlock double speed boost!', reward_coins: 100, speed_boost: 0.25, task_type: 'special', action_type: 'ad', link: '', ad_required: true, wait_time_sec: 20 },
-      ]);
+      setTasks([]);
     }
   };
 
@@ -165,6 +171,36 @@ export const AdminTab: React.FC = () => {
         >
           Refresh
         </button>
+      </div>
+
+      {/* Live Backend Connection Card */}
+      <div className="glass-panel p-3 rounded-2xl mb-4 border border-white/10">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-gray-300">
+            <Link2 size={14} className="text-brand-orange" />
+            <span>Live Backend Server URL</span>
+          </div>
+          <span className="text-[10px] text-green-400 font-bold px-1.5 py-0.5 rounded bg-green-500/10">
+            Real Server
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={serverUrl}
+            onChange={e => setServerUrl(e.target.value)}
+            placeholder="http://localhost:3000/api or https://your-server.com/api"
+            className="flex-1 px-2.5 py-1.5 rounded-xl bg-black/60 border border-white/15 text-xs text-white placeholder-gray-500 font-mono"
+          />
+          <button
+            onClick={handleSaveServerUrl}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+              urlSaved ? 'bg-green-500 text-black' : 'bg-brand-orange text-white'
+            }`}
+          >
+            {urlSaved ? <Check size={14} /> : 'Save'}
+          </button>
+        </div>
       </div>
 
       {/* KPI Stats Cards */}

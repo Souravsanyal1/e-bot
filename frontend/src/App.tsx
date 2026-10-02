@@ -55,27 +55,27 @@ export const App: React.FC = () => {
       setUser(forceAdmin ? { ...data.user, is_admin: true } : data.user);
       setMining(data.mining);
     } catch (e: any) {
-      console.warn('Sync fallback for dev mode:', e);
-      // Fallback mock user if backend is not yet started or running standalone frontend
+      console.warn('Backend sync pending, initializing real session:', e);
+      const tgUser = tg.getUser();
       setUser({
-        id: 999888777,
-        username: 'eforce_master',
-        first_name: 'E-FORCE Miner',
-        balance: 125.5,
-        speed_per_hr: 0.85,
-        referral_count: 5,
-        is_admin: true
+        id: tgUser.id,
+        username: tgUser.username || '',
+        first_name: tgUser.first_name || 'Miner',
+        balance: 0.0,
+        speed_per_hr: 0.5,
+        referral_count: 0,
+        is_admin: Boolean(forceAdmin)
       });
       setMining({
-        status: 'mining',
-        is_mining: true,
-        speed_per_hr: 0.85,
+        status: 'idle',
+        is_mining: false,
+        speed_per_hr: 0.5,
         session_hours: 24,
-        elapsed_seconds: 3600,
-        remaining_seconds: 82800,
-        progress_percent: 4.16,
-        mined_unclaimed: 0.85,
-        total_balance: 125.5
+        elapsed_seconds: 0,
+        remaining_seconds: 86400,
+        progress_percent: 0,
+        mined_unclaimed: 0.0,
+        total_balance: 0.0
       });
     } finally {
       loadTabContent();

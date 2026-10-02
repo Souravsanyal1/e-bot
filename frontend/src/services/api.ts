@@ -1,7 +1,19 @@
 import { tg } from './telegram';
 import type { User, MiningState, Task, ReferralData, LeaderboardUser, AdminStats } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+export function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('eforce_api_url');
+    if (custom) return custom.replace(/\/+$/, '');
+  }
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL.replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return `http://${window.location.hostname}:3000/api`;
+  }
+  return '/api';
+}
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const initData = tg.getInitData();
@@ -14,7 +26,8 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...(options.headers as Record<string, string> || {}),
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const apiBase = getApiBaseUrl();
+  const response = await fetch(`${apiBase}${endpoint}`, {
     ...options,
     headers,
   });

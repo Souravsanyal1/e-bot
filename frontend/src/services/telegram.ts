@@ -38,11 +38,16 @@ export const tg = {
     if (app?.initDataUnsafe?.user) {
       return app.initDataUnsafe.user;
     }
-    // Browser local development fallback user
+    // Clean unique device ID for browser preview with zero initial balance
+    let devId = localStorage.getItem('eforce_local_uid');
+    if (!devId) {
+      devId = String(Math.floor(100000000 + Math.random() * 900000000));
+      localStorage.setItem('eforce_local_uid', devId);
+    }
     return {
-      id: 999888777,
-      first_name: 'E-FORCE Miner',
-      username: 'eforce_master',
+      id: parseInt(devId, 10),
+      first_name: 'Miner #' + devId.slice(-4),
+      username: '',
       is_dev: true
     };
   },
