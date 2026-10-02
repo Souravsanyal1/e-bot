@@ -84,16 +84,21 @@ export function initBot() {
         }
       }
 
-      // Dynamic Web App launch button
-      const webAppUrl = config.MINI_APP_URL.startsWith('http') 
-        ? config.MINI_APP_URL 
-        : `https://t.me/eforce_mining_bot/app`;
+      // Dynamic Web App launch button (direct HTTPS URL required for Telegram webApp button)
+      const webAppUrl = config.MINI_APP_URL || 'https://e-force-bot.web.app';
 
       const keyboard = new InlineKeyboard()
-        .webApp('⚡ Launch E-FORCE App', webAppUrl)
-        .row()
-        .url('📢 Official Channel', 'https://t.me/telegram')
-        .url('👥 Community Chat', 'https://t.me/telegram');
+        .webApp('⚡ Launch E-FORCE App', webAppUrl);
+
+      if (config.CHANNEL_URL || config.COMMUNITY_URL) {
+        keyboard.row();
+        if (config.CHANNEL_URL) {
+          keyboard.url('📢 Official Channel', config.CHANNEL_URL);
+        }
+        if (config.COMMUNITY_URL) {
+          keyboard.url('👥 Community Chat', config.COMMUNITY_URL);
+        }
+      }
 
       const welcomeCaption = 
         `⚔️ <b>WELCOME TO E-FORCE MINING</b> ⚔️\n\n` +

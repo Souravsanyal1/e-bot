@@ -12,7 +12,7 @@ interface FriendsTabProps {
 export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals }) => {
   const [copied, setCopied] = useState(false);
 
-  const referralLink = referrals?.referral_link || 'https://t.me/eforce_mining_bot/app';
+  const referralLink = referrals?.referral_link || 'https://t.me/Elite_Force_Official_Mining_bot?start=ref_miner';
 
   const handleCopy = () => {
     tg.haptic.impact('medium');

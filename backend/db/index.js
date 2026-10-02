@@ -123,7 +123,7 @@ export async function initDatabase() {
     `);
 
     insert.run('Watch Sponsored E-FORCE Ad', 'Watch a fast sponsor video ad to boost your mining engine rate permanently!', 25.0, 0.10, 'standard', 'ad', '', 1, 15);
-    insert.run('Join Official Telegram Channel', 'Subscribe to the official announcement channel for critical airdrop news.', 50.0, 0.15, 'standard', 'telegram', 'https://t.me/telegram', 0, 5);
+    insert.run('Join Official Telegram Channel', 'Subscribe to the official announcement channel for critical airdrop news.', 50.0, 0.15, 'standard', 'telegram', 'https://t.me/Elite_Force_Official_Mining_bot', 0, 5);
     insert.run('Follow E-FORCE on X (Twitter)', 'Follow our official X handle and retweet the pinned 24H mining announcement.', 35.0, 0.08, 'standard', 'link', 'https://x.com', 0, 10);
     insert.run('🔥 SPECIAL: Supercharge Core with Video Partner', 'Watch our special partner video showcase and unlock double speed boost!', 100.0, 0.25, 'special', 'ad', '', 1, 20);
     insert.run('⚡ SPECIAL: Connect TON / Web3 Wallet Preview', 'Bookmark the upcoming Web3 smart contract connection portal.', 75.0, 0.20, 'special', 'link', 'https://ton.org', 0, 10);

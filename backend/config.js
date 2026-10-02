@@ -18,7 +18,10 @@ export const config = {
     .filter(Boolean),
   DATABASE_URL: process.env.DATABASE_URL || '',
   REDIS_URL: process.env.REDIS_URL || '',
-  MINI_APP_URL: process.env.MINI_APP_URL || 'https://t.me/eforce_bot/app',
+  MINI_APP_URL: process.env.MINI_APP_URL || 'https://e-force-bot.web.app',
+  BOT_USERNAME: process.env.BOT_USERNAME || 'Elite_Force_Official_Mining_bot',
+  CHANNEL_URL: process.env.CHANNEL_URL || '',
+  COMMUNITY_URL: process.env.COMMUNITY_URL || '',
   ADSGRAM_BLOCK_ID: process.env.ADSGRAM_BLOCK_ID || 'int-9999',
   
   // Mining Defaults

@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
 INSERT INTO tasks (title, description, reward_coins, speed_boost, task_type, action_type, link, ad_required, wait_time_sec)
 VALUES 
 ('Watch Sponsored E-FORCE Ad', 'Watch a fast sponsor video ad to boost your mining engine rate permanently!', 25.0, 0.10, 'standard', 'ad', '', TRUE, 15),
-('Join Official Telegram Channel', 'Subscribe to the official announcement channel for critical airdrop news.', 50.0, 0.15, 'standard', 'telegram', 'https://t.me/telegram', FALSE, 5),
+('Join Official Telegram Channel', 'Subscribe to the official announcement channel for critical airdrop news.', 50.0, 0.15, 'standard', 'telegram', 'https://t.me/Elite_Force_Official_Mining_bot', FALSE, 5),
 ('Follow E-FORCE on X (Twitter)', 'Follow our official X handle and retweet the pinned 24H mining announcement.', 35.0, 0.08, 'standard', 'link', 'https://x.com', FALSE, 10),
 ('🔥 SPECIAL: Supercharge Core with Video Partner', 'Watch our special partner video showcase and unlock double speed boost!', 100.0, 0.25, 'special', 'ad', '', TRUE, 20),
 ('⚡ SPECIAL: Connect TON / Web3 Wallet Preview', 'Bookmark the upcoming Web3 smart contract connection portal.', 75.0, 0.20, 'special', 'link', 'https://ton.org', FALSE, 10)

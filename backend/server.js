@@ -253,7 +253,8 @@ async function startServer() {
       LIMIT 100
     `, [user.id]);
 
-    const referralLink = `https://t.me/eforce_mining_bot/app?startapp=ref_${user.id}`;
+    const botUsername = config.BOT_USERNAME || 'Elite_Force_Official_Mining_bot';
+    const referralLink = `https://t.me/${botUsername}?start=ref_${user.id}`;
     const totalBoost = Number((dbUser.referral_count || 0) * config.REFERRAL_SPEED_BOOST).toFixed(2);
 
     return {
