@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Trophy, Medal, Zap, Crown } from 'lucide-react';
 import type { LeaderboardUser, User } from '../types';
 
@@ -6,6 +6,27 @@ interface LeaderboardTabProps {
   topMiners: LeaderboardUser[];
   currentUser: User | null;
 }
+
+const MinerAvatar: React.FC<{ name: string; id: number; photoUrl?: string; className?: string }> = ({
+  name,
+  id,
+  photoUrl,
+  className = "w-full h-full"
+}) => {
+  const [imgError, setImgError] = useState(false);
+  const fallbackUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name || String(id))}&backgroundColor=181824`;
+  const src = !imgError && photoUrl ? photoUrl : fallbackUrl;
+
+  return (
+    <img
+      src={src}
+      alt={name}
+      onError={() => setImgError(true)}
+      className={`${className} object-cover rounded-full select-none`}
+      loading="lazy"
+    />
+  );
+};
 
 export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ topMiners, currentUser }) => {
   const top1 = topMiners[0];
@@ -31,12 +52,12 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ topMiners, curre
           {/* Rank 2 */}
           <div className="flex flex-col items-center w-24">
             <div className="relative mb-2">
-              <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-gray-300 to-gray-600 flex items-center justify-center">
-                <div className="w-full h-full bg-[#181824] rounded-full flex items-center justify-center text-sm font-extrabold text-white">
-                  {top2.name.slice(0, 2).toUpperCase()}
+              <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-gray-300 via-gray-400 to-gray-600 shadow-md flex items-center justify-center">
+                <div className="w-full h-full bg-[#181824] rounded-full overflow-hidden flex items-center justify-center">
+                  <MinerAvatar name={top2.name} id={top2.id} photoUrl={top2.photo_url} />
                 </div>
               </div>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-gray-400 text-black font-black text-[11px] flex items-center justify-center border-2 border-[#0A0A0F]">
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-gray-400 text-black font-black text-[11px] flex items-center justify-center border-2 border-[#0A0A0F] shadow-sm">
                 2
               </div>
             </div>
@@ -49,14 +70,14 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ topMiners, curre
 
           {/* Rank 1 (Center, Tallest) */}
           <div className="flex flex-col items-center w-28 -mt-6">
-            <Crown size={22} className="text-yellow-400 mb-1 animate-bounce" />
+            <Crown size={24} className="text-yellow-400 mb-1 animate-bounce" />
             <div className="relative mb-2">
               <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-yellow-300 via-amber-400 to-orange-500 shadow-orange-glow flex items-center justify-center">
-                <div className="w-full h-full bg-[#181824] rounded-full flex items-center justify-center text-base font-extrabold text-white">
-                  {top1.name.slice(0, 2).toUpperCase()}
+                <div className="w-full h-full bg-[#181824] rounded-full overflow-hidden flex items-center justify-center">
+                  <MinerAvatar name={top1.name} id={top1.id} photoUrl={top1.photo_url} />
                 </div>
               </div>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-yellow-400 text-black font-black text-xs flex items-center justify-center border-2 border-[#0A0A0F]">
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-yellow-400 text-black font-black text-xs flex items-center justify-center border-2 border-[#0A0A0F] shadow-sm">
                 1
               </div>
             </div>
@@ -70,12 +91,12 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ topMiners, curre
           {/* Rank 3 */}
           <div className="flex flex-col items-center w-24">
             <div className="relative mb-2">
-              <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-700 to-yellow-900 flex items-center justify-center">
-                <div className="w-full h-full bg-[#181824] rounded-full flex items-center justify-center text-sm font-extrabold text-white">
-                  {top3.name.slice(0, 2).toUpperCase()}
+              <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-600 via-yellow-700 to-amber-900 shadow-md flex items-center justify-center">
+                <div className="w-full h-full bg-[#181824] rounded-full overflow-hidden flex items-center justify-center">
+                  <MinerAvatar name={top3.name} id={top3.id} photoUrl={top3.photo_url} />
                 </div>
               </div>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-600 text-black font-black text-[11px] flex items-center justify-center border-2 border-[#0A0A0F]">
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-600 text-black font-black text-[11px] flex items-center justify-center border-2 border-[#0A0A0F] shadow-sm">
                 3
               </div>
             </div>
@@ -103,8 +124,8 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ topMiners, curre
               <span className="w-6 text-center text-xs font-mono font-bold text-gray-400">
                 #{miner.rank}
               </span>
-              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white">
-                {miner.name.charAt(0).toUpperCase()}
+              <div className="w-8 h-8 rounded-full p-[1px] bg-white/15 overflow-hidden shrink-0 flex items-center justify-center">
+                <MinerAvatar name={miner.name} id={miner.id} photoUrl={miner.photo_url} />
               </div>
               <div>
                 <div className="text-xs font-bold text-white">{miner.name}</div>

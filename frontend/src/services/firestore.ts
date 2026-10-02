@@ -400,7 +400,8 @@ export async function getLeaderboardFirestore(): Promise<{ topMiners: Leaderboar
         name: u.first_name || u.username || 'Miner',
         balance: Number(u.balance || 0),
         speed: Number(u.speed_per_hr || BASE_MINING_RATE),
-        referrals: Number(u.referral_count || 0)
+        referrals: Number(u.referral_count || 0),
+        photo_url: u.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(u.first_name || u.username || String(u.id))}&backgroundColor=181824`
       }));
 
     return { topMiners: users };

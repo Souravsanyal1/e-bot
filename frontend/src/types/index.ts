@@ -6,6 +6,7 @@ export interface User {
   speed_per_hr: number;
   referral_count: number;
   is_admin: boolean;
+  photo_url?: string;
 }
 
 export interface MiningState {
@@ -59,6 +60,7 @@ export interface LeaderboardUser {
   balance: number;
   speed: number;
   referrals: number;
+  photo_url?: string;
 }
 
 export interface AdminStats {

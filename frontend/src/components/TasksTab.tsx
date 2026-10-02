@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Zap, PlayCircle, ExternalLink, Flame, ArrowUpRight } from 'lucide-react';
+import { CheckCircle2, Zap, PlayCircle, Flame, ArrowUpRight, Send, Gem } from 'lucide-react';
 import type { Task } from '../types';
 import { tg } from '../services/telegram';
 import { AdModal } from './AdModal';
@@ -18,6 +18,55 @@ interface TasksTabProps {
   onRefresh: () => void;
 }
 
+// Visual Task Logo/Image Badge
+const TaskBadgeIcon: React.FC<{ task: Task }> = ({ task }) => {
+  const isTg = task.action_type === 'telegram' || (task.link && task.link.includes('t.me'));
+  const isX = task.link && (task.link.includes('x.com') || task.link.includes('twitter.com'));
+  const isTon = task.link && task.link.includes('ton.org');
+  const isAd = task.ad_required || task.action_type === 'ad';
+
+  if (isAd) {
+    return (
+      <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/40 overflow-hidden shrink-0 flex items-center justify-center relative shadow-sm">
+        <img src="/katana_poster.png" alt="Ad Video" className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+          <PlayCircle size={18} className="text-white fill-orange-500/80" />
+        </div>
+      </div>
+    );
+  }
+
+  if (isTg) {
+    return (
+      <div className="w-10 h-10 rounded-xl bg-[#229ED9]/20 border border-[#229ED9]/40 shrink-0 flex items-center justify-center shadow-sm">
+        <Send size={18} className="text-[#229ED9] fill-[#229ED9] -translate-x-0.5" />
+      </div>
+    );
+  }
+
+  if (isX) {
+    return (
+      <div className="w-10 h-10 rounded-xl bg-black border border-white/20 shrink-0 flex items-center justify-center shadow-sm font-black text-white text-base">
+        𝕏
+      </div>
+    );
+  }
+
+  if (isTon) {
+    return (
+      <div className="w-10 h-10 rounded-xl bg-[#0098EA]/20 border border-[#0098EA]/40 shrink-0 flex items-center justify-center shadow-sm">
+        <Gem size={18} className="text-[#0098EA]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-brand-orange border border-orange-500/30 shrink-0 flex items-center justify-center shadow-sm">
+      <Zap size={20} />
+    </div>
+  );
+};
+
 export const TasksTab: React.FC<TasksTabProps> = ({
   standardTasks,
   specialTasks,
@@ -29,42 +78,43 @@ export const TasksTab: React.FC<TasksTabProps> = ({
   const [loadingTaskId, setLoadingTaskId] = useState<number | null>(null);
 
   const handleTaskClick = async (task: Task) => {
-    // Standard link tasks complete once, but sponsored ad tasks can be watched repeatedly for boosts!
+    // If standard task is completed, return
     if (task.is_completed && !task.ad_required) return;
 
     tg.haptic.impact('medium');
 
-    // If task requires watching an Ad (Monetag Zone: 11941636 Official SDK)
-    if (task.ad_required) {
-      if (typeof window.show_11941636 === 'function') {
-        setLoadingTaskId(task.id);
+    // DO task or Watch task: Trigger Monetag Ad first for ALL tasks!
+    if (typeof window.show_11941636 === 'function') {
+      setLoadingTaskId(task.id);
+      try {
+        // 1. Trigger official Monetag Rewarded Interstitial
+        await window.show_11941636();
+        if (task.link) {
+          if (task.link.includes('t.me')) tg.openTelegramLink(task.link);
+          else tg.openLink(task.link);
+        }
+        await handleAdFinished(task);
+        return;
+      } catch (adErr) {
+        console.warn("Monetag rewarded interstitial failed, attempting popup:", adErr);
         try {
-          // 1. Trigger official Monetag Rewarded Interstitial
-          await window.show_11941636();
+          // 2. Fallback to Monetag Rewarded Popup
+          await window.show_11941636('pop');
+          if (task.link) {
+            if (task.link.includes('t.me')) tg.openTelegramLink(task.link);
+            else tg.openLink(task.link);
+          }
           await handleAdFinished(task);
           return;
-        } catch (adErr) {
-          console.warn("Monetag rewarded interstitial failed, attempting rewarded pop:", adErr);
-          try {
-            // 2. Fallback to Monetag Rewarded Popup
-            await window.show_11941636('pop');
-            await handleAdFinished(task);
-            return;
-          } catch (popErr) {
-            console.warn("Monetag pop also skipped/blocked, falling back to in-app player:", popErr);
-          }
-        } finally {
-          setLoadingTaskId(null);
+        } catch (popErr) {
+          console.warn("Monetag pop also failed, opening in-app player:", popErr);
         }
+      } finally {
+        setLoadingTaskId(null);
       }
-
-      // 3. Fallback native in-app cyber video player modal
-      setSelectedAdTask(task);
-      setIsAdOpen(true);
-      return;
     }
 
-    // If external link or telegram
+    // If external link, open it alongside the in-app ad
     if (task.link) {
       if (task.link.includes('t.me')) {
         tg.openTelegramLink(task.link);
@@ -73,16 +123,9 @@ export const TasksTab: React.FC<TasksTabProps> = ({
       }
     }
 
-    // Complete task after confirmation
-    setLoadingTaskId(task.id);
-    try {
-      await onCompleteTask(task.id);
-      tg.haptic.notification('success');
-    } catch (e) {
-      tg.haptic.notification('error');
-    } finally {
-      setLoadingTaskId(null);
-    }
+    // 3. Fallback native in-app cyber video player modal (ensures ad ALWAYS plays)
+    setSelectedAdTask(task);
+    setIsAdOpen(true);
   };
 
   const handleAdFinished = async (task: Task) => {
@@ -165,11 +208,7 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                 }`}
               >
                 <div className="flex items-center gap-3 pr-2">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                    task.is_completed && !task.ad_required ? 'bg-white/10 text-gray-400' : 'bg-orange-500/20 text-brand-orange border border-orange-500/30'
-                  }`}>
-                    {task.ad_required ? <PlayCircle size={20} /> : <Zap size={20} />}
-                  </div>
+                  <TaskBadgeIcon task={task} />
 
                   <div>
                     <div className="flex items-center gap-1.5">
@@ -246,11 +285,7 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                 }`}
               >
                 <div className="flex items-center gap-3 pr-2">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                    task.is_completed && !task.ad_required ? 'bg-white/10 text-gray-400' : 'bg-white/5 text-white border border-white/10'
-                  }`}>
-                    {task.ad_required ? <PlayCircle size={18} className="text-brand-orange" /> : <ExternalLink size={18} />}
-                  </div>
+                  <TaskBadgeIcon task={task} />
 
                   <div>
                     <div className="flex items-center gap-1.5">
@@ -288,7 +323,10 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                           <span>{task.is_completed ? 'Watch Again' : 'Watch'}</span>
                         </>
                       ) : (
-                        <span>Do Task</span>
+                        <>
+                          <PlayCircle size={13} className="text-yellow-300" />
+                          <span>Do Task</span>
+                        </>
                       )}
                     </button>
                   )}
