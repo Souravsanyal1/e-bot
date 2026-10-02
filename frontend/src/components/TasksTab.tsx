@@ -4,7 +4,6 @@ import { CheckCircle2, Zap, PlayCircle, ExternalLink, Flame, ArrowUpRight } from
 import type { Task } from '../types';
 import { tg } from '../services/telegram';
 import { AdModal } from './AdModal';
-import { getAppSettings } from '../services/firestore';
 
 declare global {
   interface Window {
@@ -34,25 +33,8 @@ export const TasksTab: React.FC<TasksTabProps> = ({
 
     tg.haptic.impact('medium');
 
-    // If task requires watching an Ad (Gigapub Integration App ID: 8451)
+    // If task requires watching an Ad (Sponsored Video & Gigapub Engine)
     if (task.ad_required) {
-      setLoadingTaskId(task.id);
-      try {
-        const appSettings = await getAppSettings();
-        if (appSettings.gigapub_enabled !== false && typeof window.showGiga === 'function') {
-          // Trigger official Gigapub ad modal
-          await window.showGiga();
-          // Gigapub ad completed successfully -> claim reward directly
-          await handleAdFinished(task);
-          return;
-        }
-      } catch (gigaErr) {
-        console.warn("Gigapub ad skipped or errored, falling back to in-app player:", gigaErr);
-      } finally {
-        setLoadingTaskId(null);
-      }
-
-      // Fallback native Katana in-app player modal if ad blocked
       setSelectedAdTask(task);
       setIsAdOpen(true);
       return;
