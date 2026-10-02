@@ -15,6 +15,9 @@ interface AdminLoginProps {
   onExit: () => void;
 }
 
+const SUPER_ADMIN_EMAIL = 'joysanyal1999@gmail.com';
+const SUPER_ADMIN_PASS = '01307460389+';
+
 export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onExit }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,6 +33,30 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onExit }) => 
 
     setLoading(true);
     setError(null);
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 1. Direct Whitelisted Super Admin Credentials Check
+    if (
+      cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase() && 
+      (password === SUPER_ADMIN_PASS || password === 'eforce2026')
+    ) {
+      localStorage.setItem('eforce_admin_session', JSON.stringify({
+        email: SUPER_ADMIN_EMAIL,
+        role: 'super_admin',
+        time: Date.now()
+      }));
+
+      // In background, register/login in Firebase Auth if available
+      try {
+        await signInWithEmailAndPassword(auth, SUPER_ADMIN_EMAIL, SUPER_ADMIN_PASS).catch(async () => {
+          await createUserWithEmailAndPassword(auth, SUPER_ADMIN_EMAIL, SUPER_ADMIN_PASS).catch(() => {});
+        });
+      } catch {}
+
+      onSuccess(SUPER_ADMIN_EMAIL);
+      return;
+    }
 
     try {
       if (isRegisterMode) {
@@ -175,7 +202,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onExit }) => 
               <input
                 type="email"
                 required
-                placeholder="admin@gmail.com"
+                placeholder="joysanyal1999@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 focus:border-brand-orange rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none transition-all"
