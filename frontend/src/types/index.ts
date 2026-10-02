@@ -79,6 +79,8 @@ export interface WithdrawalRequest {
   updated_at?: string;
   tx_hash?: string;
   admin_note?: string;
+  onchain_verified?: boolean;
+  network?: 'testnet' | 'mainnet';
 }
 
 export interface AdminStats {

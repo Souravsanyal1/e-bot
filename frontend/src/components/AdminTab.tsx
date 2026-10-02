@@ -4,7 +4,8 @@ import {
   Coins, CheckSquare, Zap, Search, RefreshCw, 
   ArrowLeft, CheckCircle2, AlertTriangle, Radio, 
   ExternalLink, Ban, Sparkles, MessageSquare,
-  Sliders, Wallet, Copy, Check, XCircle, Clock
+  Sliders, Wallet, Copy, Check, XCircle, Clock,
+  Eye, EyeOff, Cpu, Play
 } from 'lucide-react';
 import { 
   getAdminStatsFirestore, 
@@ -20,6 +21,11 @@ import {
   getAllWithdrawalsFirestore,
   adminUpdateWithdrawalStatusFirestore
 } from '../services/firestore';
+import { 
+  verifyWalletAndReferCodeOnChain, 
+  executeAutoTokenPayout, 
+  NETWORKS 
+} from '../services/blockchain';
 import type { AdminStats, Task, WithdrawalRequest } from '../types';
 
 interface AdminTabProps {
@@ -51,8 +57,16 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
   const [withdrawFeePercent, setWithdrawFeePercent] = useState<number>(5);
   const [minWithdrawAmount, setMinWithdrawAmount] = useState<number>(50);
   const [withdrawEnabled, setWithdrawEnabled] = useState<boolean>(true);
+  const [bep20ContractAddress, setBep20ContractAddress] = useState<string>('0x292c6f3a5645343cdd26f71a84ee29aa1d6c5a90');
+  const [blockchainNetwork, setBlockchainNetwork] = useState<'testnet' | 'mainnet'>('testnet');
+  const [autoApproveEnabled, setAutoApproveEnabled] = useState<boolean>(true);
+  const [scanReferCodeOnchain, setScanReferCodeOnchain] = useState<boolean>(true);
+  const [payoutPrivateKey, setPayoutPrivateKey] = useState<string>('');
+  const [showPrivateKey, setShowPrivateKey] = useState<boolean>(false);
   const [savingWithdrawConfig, setSavingWithdrawConfig] = useState(false);
   const [withdrawConfigSaved, setWithdrawConfigSaved] = useState(false);
+  const [batchScanning, setBatchScanning] = useState<boolean>(false);
+  const [batchScanMessage, setBatchScanMessage] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -103,6 +117,11 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
       setWithdrawFeePercent(appSettings.withdraw_fee_percent !== undefined ? appSettings.withdraw_fee_percent : 5);
       setMinWithdrawAmount(appSettings.min_withdraw_amount !== undefined ? appSettings.min_withdraw_amount : 50);
       setWithdrawEnabled(appSettings.withdraw_enabled !== false);
+      setBep20ContractAddress(appSettings.bep20_contract_address || '0x292c6f3a5645343cdd26f71a84ee29aa1d6c5a90');
+      setBlockchainNetwork(appSettings.blockchain_network || 'testnet');
+      setAutoApproveEnabled(appSettings.auto_approve_enabled !== false);
+      setScanReferCodeOnchain(appSettings.scan_refer_code_onchain !== false);
+      setPayoutPrivateKey(appSettings.payout_private_key || '');
     } catch (err: any) {
       console.warn('Admin load error:', err);
     } finally {
@@ -134,7 +153,12 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
       await updateAppSettings({
         withdraw_fee_percent: Number(withdrawFeePercent),
         min_withdraw_amount: Number(minWithdrawAmount),
-        withdraw_enabled: withdrawEnabled
+        withdraw_enabled: withdrawEnabled,
+        bep20_contract_address: bep20ContractAddress.trim() || '0x292c6f3a5645343cdd26f71a84ee29aa1d6c5a90',
+        blockchain_network: blockchainNetwork,
+        auto_approve_enabled: autoApproveEnabled,
+        scan_refer_code_onchain: scanReferCodeOnchain,
+        payout_private_key: payoutPrivateKey.trim()
       });
       setWithdrawConfigSaved(true);
       setTimeout(() => setWithdrawConfigSaved(false), 3000);
@@ -142,6 +166,107 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
       alert('Error saving withdrawal settings: ' + err.message);
     } finally {
       setSavingWithdrawConfig(false);
+    }
+  };
+
+  // Run on-chain verification for a single request
+  const handleVerifySingleOnChain = async (wd: WithdrawalRequest) => {
+    setProcessingWdId(wd.id);
+    try {
+      const res = await verifyWalletAndReferCodeOnChain({
+        walletAddress: wd.wallet_address,
+        referCode: wd.refer_code,
+        contractAddress: bep20ContractAddress,
+        network: blockchainNetwork
+      });
+
+      alert(`Blockchain Verification Result for ${wd.user_name}:\n\nStatus: ${res.verified ? 'VERIFIED ✓' : 'NOT VERIFIED'}\nScore: ${res.score}%\nDetails: ${res.details}`);
+      
+      // Update in firestore
+      await adminUpdateWithdrawalStatusFirestore(wd.id, wd.status, res.details);
+      const updated = await getAllWithdrawalsFirestore();
+      setWithdrawals(updated);
+    } catch (err: any) {
+      alert('Verification error: ' + err.message);
+    } finally {
+      setProcessingWdId(null);
+    }
+  };
+
+  // Batch scan all pending withdrawals on-chain
+  const handleBatchBlockchainScan = async () => {
+    const pendingList = withdrawals.filter(w => w.status === 'pending');
+    if (pendingList.length === 0) {
+      alert('No pending withdrawal requests to scan on the blockchain.');
+      return;
+    }
+
+    setBatchScanning(true);
+    setBatchScanMessage(`Scanning ${pendingList.length} pending addresses on ${NETWORKS[blockchainNetwork].name}...`);
+
+    let verifiedCount = 0;
+    try {
+      for (let i = 0; i < pendingList.length; i++) {
+        const item = pendingList[i];
+        setBatchScanMessage(`Scanning (${i + 1}/${pendingList.length}): ${item.wallet_address.slice(0, 10)}...`);
+
+        const res = await verifyWalletAndReferCodeOnChain({
+          walletAddress: item.wallet_address,
+          referCode: item.refer_code,
+          contractAddress: bep20ContractAddress,
+          network: blockchainNetwork
+        });
+
+        if (res.verified) {
+          verifiedCount++;
+        }
+
+        await adminUpdateWithdrawalStatusFirestore(item.id, item.status, res.details);
+      }
+
+      const updated = await getAllWithdrawalsFirestore();
+      setWithdrawals(updated);
+      setBatchScanMessage(`Completed! Verified ${verifiedCount} of ${pendingList.length} addresses on-chain.`);
+      setTimeout(() => setBatchScanMessage(null), 4000);
+    } catch (e: any) {
+      setBatchScanMessage(`Scan error: ${e.message}`);
+    } finally {
+      setBatchScanning(false);
+    }
+  };
+
+  // Auto-Payout single request on-chain via Hot Wallet
+  const handleAutoPayoutSingle = async (wd: WithdrawalRequest) => {
+    if (!payoutPrivateKey) {
+      const key = prompt('Enter your Payout Hot Wallet Private Key to dispatch on-chain transaction:');
+      if (!key) return;
+      setPayoutPrivateKey(key);
+    }
+
+    if (!confirm(`Execute REAL on-chain transfer of ${wd.net_amount.toFixed(2)} tokens to ${wd.wallet_address} on ${NETWORKS[blockchainNetwork].name}?`)) {
+      return;
+    }
+
+    setProcessingWdId(wd.id);
+    try {
+      const res = await executeAutoTokenPayout({
+        privateKey: payoutPrivateKey,
+        tokenAddress: bep20ContractAddress,
+        recipientAddress: wd.wallet_address,
+        amount: wd.net_amount,
+        network: blockchainNetwork
+      });
+
+      alert(`Transaction Confirmed on BSC!\n\nTx Hash: ${res.txHash}\nExplorer: ${res.explorerUrl}`);
+
+      // Mark completed in firestore with real Tx Hash
+      await adminUpdateWithdrawalStatusFirestore(wd.id, 'completed', `Auto-paid on-chain: ${res.txHash}`);
+      const updated = await getAllWithdrawalsFirestore();
+      setWithdrawals(updated);
+    } catch (err: any) {
+      alert('On-chain payout failed: ' + err.message);
+    } finally {
+      setProcessingWdId(null);
     }
   };
 
@@ -636,16 +761,16 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
               </form>
             </div>
 
-            {/* Withdrawal System Settings Panel in Overview */}
+            {/* Withdrawal System & Blockchain Protocol Settings Panel in Overview */}
             <div className="glass-panel p-6 rounded-2xl border border-white/10">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <Wallet size={18} className="text-brand-orange" />
-                    BEP20 Withdrawal Protocol Settings
+                    BEP20 Blockchain & Auto-Payout Protocol Settings
                   </h3>
                   <p className="text-xs text-gray-400 mt-1">
-                    Control user withdrawal fees, minimum token limits, and global payout status.
+                    Configure the on-chain contract address, network, refer code scanner, and automated hot wallet payout rules.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -657,10 +782,78 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
                     {withdrawEnabled ? 'Withdrawals Active' : 'Withdrawals Paused'}
                   </span>
+                  <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30 font-mono">
+                    {blockchainNetwork === 'testnet' ? 'BSC Testnet (Chain 97)' : 'BSC Mainnet (Chain 56)'}
+                  </span>
                 </div>
               </div>
 
               <form onSubmit={handleSaveWithdrawConfig} className="space-y-4">
+                {/* Row 1: Token Contract Address & Network */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="lg:col-span-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-gray-300 font-semibold flex items-center gap-1">
+                        <span>BEP-20 Token / Vault Contract Address (Dynamic)</span>
+                        <span className="text-brand-orange">*</span>
+                      </label>
+                      <a
+                        href={`${NETWORKS[blockchainNetwork].explorerUrl}/address/${bep20ContractAddress}#tokentxns`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] font-bold text-orange-400 hover:underline flex items-center gap-1"
+                      >
+                        <span>View on BscScan</span>
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="0x292c6f3a5645343cdd26f71a84ee29aa1d6c5a90"
+                      value={bep20ContractAddress}
+                      onChange={(e) => setBep20ContractAddress(e.target.value.trim())}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-brand-orange"
+                    />
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      All user withdrawals and on-chain verification will dynamically route to this contract or payout address.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-gray-300 font-semibold block mb-1">
+                      Blockchain Network
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBlockchainNetwork('testnet')}
+                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                          blockchainNetwork === 'testnet'
+                            ? 'bg-brand-orange text-black border-brand-orange shadow-orange-glow'
+                            : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'
+                        }`}
+                      >
+                        BSC Testnet (97)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBlockchainNetwork('mainnet')}
+                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                          blockchainNetwork === 'mainnet'
+                            ? 'bg-brand-orange text-black border-brand-orange shadow-orange-glow'
+                            : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'
+                        }`}
+                      >
+                        BSC Mainnet (56)
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      RPC: {NETWORKS[blockchainNetwork].rpcUrl}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Row 2: Fee, Min Limit, and User Withdrawal Toggle */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="text-xs text-gray-300 font-semibold block mb-1">
@@ -721,6 +914,72 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                   </div>
                 </div>
 
+                {/* Row 3: Auto-Approve & On-Chain Scanning Rules */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-white/5">
+                  <label className="flex items-center gap-3 cursor-pointer p-3.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all">
+                    <input
+                      type="checkbox"
+                      checked={autoApproveEnabled}
+                      onChange={(e) => setAutoApproveEnabled(e.target.checked)}
+                      className="w-4 h-4 rounded border-white/20 accent-orange-500"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-white block flex items-center gap-1.5">
+                        <Cpu size={14} className="text-brand-orange" />
+                        Automated On-Chain Approval Engine
+                      </span>
+                      <span className="text-[11px] text-gray-400 block mt-0.5">
+                        When enabled, valid requests are checked against the BSC blockchain RPC and approved automatically without manual review.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer p-3.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all">
+                    <input
+                      type="checkbox"
+                      checked={scanReferCodeOnchain}
+                      onChange={(e) => setScanReferCodeOnchain(e.target.checked)}
+                      className="w-4 h-4 rounded border-white/20 accent-orange-500"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-white block flex items-center gap-1.5">
+                        <Zap size={14} className="text-amber-400" />
+                        On-Chain Refer Code & Wallet Scanner
+                      </span>
+                      <span className="text-[11px] text-gray-400 block mt-0.5">
+                        Scans BSC blocks to verify user's wallet activity and 6-digit refer code before processing payout.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Row 4: Optional Hot Wallet Private Key for Automated Dispensing */}
+                <div className="pt-2 border-t border-white/5">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-300 font-semibold flex items-center gap-1">
+                      <span>Hot Wallet Private Key for Automated On-Chain Payouts (Optional)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPrivateKey(!showPrivateKey)}
+                      className="text-[11px] text-gray-400 hover:text-white flex items-center gap-1"
+                    >
+                      {showPrivateKey ? <EyeOff size={12} /> : <Eye size={12} />}
+                      <span>{showPrivateKey ? 'Hide' : 'Show'}</span>
+                    </button>
+                  </div>
+                  <input
+                    type={showPrivateKey ? 'text' : 'password'}
+                    placeholder="Enter private key (0x...) to enable 1-click batch automated payouts directly to BSC"
+                    value={payoutPrivateKey}
+                    onChange={(e) => setPayoutPrivateKey(e.target.value.trim())}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-brand-orange"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    If configured, the admin can dispatch REAL on-chain transfers with 1-click or let the system auto-payout.
+                  </p>
+                </div>
+
                 <div className="flex items-center gap-3 pt-2">
                   <button
                     type="submit"
@@ -732,12 +991,12 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     ) : (
                       <CheckCircle2 size={15} />
                     )}
-                    <span>Save Withdrawal Protocol Settings</span>
+                    <span>Save Blockchain & Withdrawal Settings</span>
                   </button>
 
                   {withdrawConfigSaved && (
                     <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 size={14} /> Saved & Applied Live!
+                      <CheckCircle2 size={14} /> Saved & Applied Live to Blockchain Router!
                     </span>
                   )}
                 </div>
@@ -773,38 +1032,72 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
               </div>
             </div>
 
-            {/* Filter and Search Bar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
-                {[
-                  { id: 'all', label: `All (${withdrawals.length})` },
-                  { id: 'pending', label: `Pending (${withdrawals.filter(w => w.status === 'pending').length})` },
-                  { id: 'completed', label: `Paid (${withdrawals.filter(w => w.status === 'completed').length})` },
-                  { id: 'rejected', label: `Rejected (${withdrawals.filter(w => w.status === 'rejected').length})` }
-                ].map(f => (
-                  <button
-                    key={f.id}
-                    onClick={() => setWithdrawFilter(f.id as any)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                      withdrawFilter === f.id
-                        ? 'bg-brand-orange text-black font-extrabold shadow-orange-glow'
-                        : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/5'
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
+            {/* Filter, Search, and Blockchain Actions Bar */}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+                  {[
+                    { id: 'all', label: `All (${withdrawals.length})` },
+                    { id: 'pending', label: `Pending (${withdrawals.filter(w => w.status === 'pending').length})` },
+                    { id: 'completed', label: `Paid (${withdrawals.filter(w => w.status === 'completed').length})` },
+                    { id: 'rejected', label: `Rejected (${withdrawals.filter(w => w.status === 'rejected').length})` }
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => setWithdrawFilter(f.id as any)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                        withdrawFilter === f.id
+                          ? 'bg-brand-orange text-black font-extrabold shadow-orange-glow'
+                          : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/5'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative w-full sm:w-72">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search wallet, code, ID or name..."
+                    value={withdrawSearch}
+                    onChange={(e) => setWithdrawSearch(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-brand-orange"
+                  />
+                </div>
               </div>
 
-              <div className="relative w-full sm:w-72">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search wallet, code, ID or name..."
-                  value={withdrawSearch}
-                  onChange={(e) => setWithdrawSearch(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-brand-orange"
-                />
+              {/* Blockchain Batch Action Buttons */}
+              <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-white/5">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={batchScanning}
+                    onClick={handleBatchBlockchainScan}
+                    className="px-3.5 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    <Cpu size={14} className={batchScanning ? 'animate-spin' : ''} />
+                    <span>Scan Pending on Blockchain</span>
+                  </button>
+
+                  <a
+                    href={`${NETWORKS[blockchainNetwork].explorerUrl}/address/${bep20ContractAddress}#tokentxns`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5 transition-all"
+                  >
+                    <span>Inspect Token Contract</span>
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
+
+                {batchScanMessage && (
+                  <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20 flex items-center gap-1.5 animate-pulse">
+                    <CheckCircle2 size={13} />
+                    <span>{batchScanMessage}</span>
+                  </span>
+                )}
               </div>
             </div>
 
@@ -848,7 +1141,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                         <th className="py-3 px-4 text-right">Requested</th>
                         <th className="py-3 px-4 text-right">Fee ({withdrawFeePercent}%)</th>
                         <th className="py-3 px-4 text-right">Net Payout</th>
-                        <th className="py-3 px-4 text-center">Status</th>
+                        <th className="py-3 px-4 text-center">Status / Tx</th>
                         <th className="py-3 px-4 text-center">Actions</th>
                       </tr>
                     </thead>
@@ -874,7 +1167,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                               </div>
                             </td>
 
-                            {/* Wallet Address */}
+                            {/* Wallet Address & On-Chain Badge */}
                             <td className="py-3 px-4 font-mono">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 text-[11px]">
@@ -893,7 +1186,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                                   )}
                                 </button>
                                 <a
-                                  href={`https://bscscan.com/address/${wd.wallet_address}`}
+                                  href={`${NETWORKS[blockchainNetwork].explorerUrl}/address/${wd.wallet_address}`}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="p-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 hover:text-brand-orange transition-all"
@@ -901,6 +1194,12 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                                 >
                                   <ExternalLink size={12} />
                                 </a>
+
+                                {wd.onchain_verified && (
+                                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                    BSC Verified
+                                  </span>
+                                )}
                               </div>
                               <div className="text-[9px] text-gray-500 mt-0.5 truncate max-w-[200px]" title={wd.wallet_address}>
                                 {wd.wallet_address}
@@ -930,7 +1229,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                               <span className="text-[10px] text-gray-400 font-normal ml-1">E-FORCE</span>
                             </td>
 
-                            {/* Status */}
+                            {/* Status & Tx Hash Link */}
                             <td className="py-3 px-4 text-center">
                               {isPending && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -938,9 +1237,24 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                                 </span>
                               )}
                               {isCompleted && (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                  <CheckCircle2 size={10} /> Paid
-                                </span>
+                                <div>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    <CheckCircle2 size={10} /> Paid
+                                  </span>
+                                  {wd.tx_hash && (
+                                    <div className="mt-1">
+                                      <a
+                                        href={`${NETWORKS[blockchainNetwork].explorerUrl}/tx/${wd.tx_hash}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-[10px] font-mono text-blue-400 hover:underline flex items-center justify-center gap-1"
+                                      >
+                                        <span>Tx: {wd.tx_hash.slice(0, 8)}...</span>
+                                        <ExternalLink size={10} />
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
                               )}
                               {isRejected && (
                                 <div>
@@ -959,26 +1273,44 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                             {/* Actions */}
                             <td className="py-3 px-4 text-center">
                               {isPending ? (
-                                <div className="flex items-center justify-center gap-1.5">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={isProcessing}
+                                    onClick={() => handleVerifySingleOnChain(wd)}
+                                    className="p-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50"
+                                    title="Scan wallet & refer code on BSC"
+                                  >
+                                    <Cpu size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isProcessing}
+                                    onClick={() => handleAutoPayoutSingle(wd)}
+                                    className="px-2 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 text-brand-orange border border-orange-500/40 text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50"
+                                    title="Auto-Payout on BSC via Hot Wallet"
+                                  >
+                                    <Play size={10} />
+                                    <span>Auto-Pay</span>
+                                  </button>
                                   <button
                                     type="button"
                                     disabled={isProcessing}
                                     onClick={() => handleApproveWithdrawal(wd)}
-                                    className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50"
-                                    title="Mark as Paid / Completed"
+                                    className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50"
+                                    title="Mark as Paid Manually"
                                   >
                                     <Check size={12} />
-                                    <span>Pay</span>
+                                    <span>Paid</span>
                                   </button>
                                   <button
                                     type="button"
                                     disabled={isProcessing}
                                     onClick={() => handleRejectWithdrawal(wd)}
-                                    className="px-2.5 py-1 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50"
+                                    className="px-2 py-1 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50"
                                     title="Reject and Refund E-FORCE to user"
                                   >
                                     <XCircle size={12} />
-                                    <span>Refund</span>
                                   </button>
                                 </div>
                               ) : (

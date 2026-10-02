@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Wallet, ArrowDownToLine, AlertCircle, 
   Clock, CheckCircle2, XCircle, Copy, Check, Sparkles, 
-  RefreshCw, Info
+  RefreshCw, Info, ExternalLink
 } from 'lucide-react';
 import { 
   createWithdrawalFirestore, 
   getUserWithdrawalsFirestore, 
   getAppSettings 
 } from '../services/firestore';
+import { NETWORKS } from '../services/blockchain';
 import { tg } from '../services/telegram';
 import type { User, WithdrawalRequest } from '../types';
 
@@ -37,6 +38,8 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
   const [feePercent, setFeePercent] = useState<number>(5);
   const [minAmount, setMinAmount] = useState<number>(50);
   const [withdrawEnabled, setWithdrawEnabled] = useState<boolean>(true);
+  const [contractAddress, setContractAddress] = useState<string>('0x292c6f3a5645343cdd26f71a84ee29aa1d6c5a90');
+  const [network, setNetwork] = useState<'testnet' | 'mainnet'>('testnet');
 
   // Alerts & UX
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -57,6 +60,8 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
       if (cfg.withdraw_fee_percent !== undefined) setFeePercent(cfg.withdraw_fee_percent);
       if (cfg.min_withdraw_amount !== undefined) setMinAmount(cfg.min_withdraw_amount);
       if (cfg.withdraw_enabled !== undefined) setWithdrawEnabled(cfg.withdraw_enabled);
+      if (cfg.bep20_contract_address) setContractAddress(cfg.bep20_contract_address);
+      if (cfg.blockchain_network) setNetwork(cfg.blockchain_network);
     } catch (e) {
       console.warn('Failed to load settings:', e);
     }
@@ -237,6 +242,23 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
             <ArrowDownToLine size={13} className="text-brand-orange" />
             <span className="text-gray-300">Min: <strong className="text-white">{minAmount} E-FORCE</strong></span>
           </div>
+        </div>
+
+        {/* Dynamic Token Contract Link Pill */}
+        <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-gray-400">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span>Vault: <strong className="font-mono text-gray-300">{contractAddress.slice(0, 6)}...{contractAddress.slice(-4)}</strong></span>
+          </span>
+          <a
+            href={`${NETWORKS[network].explorerUrl}/address/${contractAddress}#tokentxns`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-orange-400 hover:underline flex items-center gap-1 font-bold text-[10px]"
+          >
+            <span>BscScan Txns</span>
+            <ExternalLink size={10} />
+          </a>
         </div>
       </div>
 
@@ -491,6 +513,11 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
                     </div>
 
                     <div className="flex items-center gap-1.5">
+                      {item.onchain_verified && (
+                        <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          ✓ Verified
+                        </span>
+                      )}
                       {isPending && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                           <Clock size={10} /> Pending Admin
@@ -508,6 +535,21 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
                       )}
                     </div>
                   </div>
+
+                  {item.tx_hash && (
+                    <div className="flex items-center gap-1 text-[11px] font-mono">
+                      <span className="text-gray-400">Blockchain Tx:</span>
+                      <a
+                        href={`${NETWORKS[network].explorerUrl}/tx/${item.tx_hash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-400 hover:underline flex items-center gap-1"
+                      >
+                        <span>{item.tx_hash.slice(0, 10)}...{item.tx_hash.slice(-6)}</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between text-[11px] text-gray-400 font-mono">
                     <div className="flex items-center gap-1">

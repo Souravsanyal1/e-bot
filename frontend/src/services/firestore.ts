@@ -675,9 +675,15 @@ export interface AppSettings {
   withdraw_fee_percent?: number;
   min_withdraw_amount?: number;
   withdraw_enabled?: boolean;
+  bep20_contract_address?: string;
+  blockchain_network?: 'testnet' | 'mainnet';
+  auto_approve_enabled?: boolean;
+  scan_refer_code_onchain?: boolean;
+  payout_private_key?: string;
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
+  const defaultContract = '0x292c6f3a5645343cdd26f71a84ee29aa1d6c5a90';
   try {
     const snap = await getDoc(doc(db, 'settings', 'config'));
     if (snap.exists()) {
@@ -689,7 +695,12 @@ export async function getAppSettings(): Promise<AppSettings> {
         gigapub_enabled: data.gigapub_enabled !== false,
         withdraw_fee_percent: data.withdraw_fee_percent !== undefined ? Number(data.withdraw_fee_percent) : 5,
         min_withdraw_amount: data.min_withdraw_amount !== undefined ? Number(data.min_withdraw_amount) : 50,
-        withdraw_enabled: data.withdraw_enabled !== false
+        withdraw_enabled: data.withdraw_enabled !== false,
+        bep20_contract_address: data.bep20_contract_address || defaultContract,
+        blockchain_network: data.blockchain_network || 'testnet',
+        auto_approve_enabled: data.auto_approve_enabled !== false,
+        scan_refer_code_onchain: data.scan_refer_code_onchain !== false,
+        payout_private_key: data.payout_private_key || ''
       };
     }
   } catch (e) {
@@ -703,6 +714,10 @@ export async function getAppSettings(): Promise<AppSettings> {
   const localEnabled = localStorage.getItem('eforce_gigapub_enabled') !== 'false';
   const localFee = localStorage.getItem('eforce_withdraw_fee') ? Number(localStorage.getItem('eforce_withdraw_fee')) : 5;
   const localMin = localStorage.getItem('eforce_min_withdraw') ? Number(localStorage.getItem('eforce_min_withdraw')) : 50;
+  const localContract = localStorage.getItem('eforce_bep20_contract') || defaultContract;
+  const localNet = (localStorage.getItem('eforce_blockchain_network') as any) || 'testnet';
+  const localAutoApprove = localStorage.getItem('eforce_auto_approve') !== 'false';
+  const localScanRefer = localStorage.getItem('eforce_scan_refer') !== 'false';
 
   return {
     monetag_zone_id: localMonetagZone,
@@ -711,7 +726,12 @@ export async function getAppSettings(): Promise<AppSettings> {
     gigapub_enabled: localEnabled,
     withdraw_fee_percent: localFee,
     min_withdraw_amount: localMin,
-    withdraw_enabled: true
+    withdraw_enabled: true,
+    bep20_contract_address: localContract,
+    blockchain_network: localNet,
+    auto_approve_enabled: localAutoApprove,
+    scan_refer_code_onchain: localScanRefer,
+    payout_private_key: ''
   };
 }
 
@@ -740,6 +760,18 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
   }
   if (settings.min_withdraw_amount !== undefined) {
     localStorage.setItem('eforce_min_withdraw', String(settings.min_withdraw_amount));
+  }
+  if (settings.bep20_contract_address !== undefined) {
+    localStorage.setItem('eforce_bep20_contract', settings.bep20_contract_address);
+  }
+  if (settings.blockchain_network !== undefined) {
+    localStorage.setItem('eforce_blockchain_network', settings.blockchain_network);
+  }
+  if (settings.auto_approve_enabled !== undefined) {
+    localStorage.setItem('eforce_auto_approve', String(settings.auto_approve_enabled));
+  }
+  if (settings.scan_refer_code_onchain !== undefined) {
+    localStorage.setItem('eforce_scan_refer', String(settings.scan_refer_code_onchain));
   }
 }
 
@@ -802,6 +834,52 @@ export async function createWithdrawalFirestore(params: {
   const docId = `wd_${Date.now()}_${userId}`;
   const now = new Date().toISOString();
 
+  // Blockchain Auto-Verification Check
+  let onchainVerified = false;
+  let autoApprovedStatus: 'pending' | 'completed' = 'pending';
+  let txHash: string | undefined;
+  let adminNote: string | undefined;
+
+  try {
+    const { verifyWalletAndReferCodeOnChain } = await import('./blockchain');
+    const verRes = await verifyWalletAndReferCodeOnChain({
+      walletAddress: cleanAddr,
+      referCode: cleanCode,
+      contractAddress: settings.bep20_contract_address || '0x292c6f3a5645343cdd26f71a84ee29aa1d6c5a90',
+      network: settings.blockchain_network || 'testnet'
+    });
+
+    onchainVerified = verRes.verified;
+    adminNote = verRes.details;
+
+    // Check if Auto-Approve & Auto-Payout with Hot Wallet is enabled
+    if (settings.auto_approve_enabled && settings.payout_private_key) {
+      try {
+        const { executeAutoTokenPayout } = await import('./blockchain');
+        const payoutRes = await executeAutoTokenPayout({
+          privateKey: settings.payout_private_key,
+          tokenAddress: settings.bep20_contract_address || '0x292c6f3a5645343cdd26f71a84ee29aa1d6c5a90',
+          recipientAddress: cleanAddr,
+          amount: netAmount,
+          network: settings.blockchain_network || 'testnet'
+        });
+
+        if (payoutRes.success) {
+          autoApprovedStatus = 'completed';
+          txHash = payoutRes.txHash;
+          adminNote = `Auto-paid on-chain via Hot Wallet. Tx: ${txHash}`;
+        }
+      } catch (payoutErr: any) {
+        console.warn('Auto-payout execution fallback to manual pending:', payoutErr);
+        adminNote = `On-chain verified. Auto-payout pending admin review: ${payoutErr.message}`;
+      }
+    } else if (settings.auto_approve_enabled && onchainVerified) {
+      adminNote = `On-chain BEP20 address & refer code verified on ${settings.blockchain_network || 'testnet'}. Ready for payout.`;
+    }
+  } catch (verifyErr) {
+    console.warn('On-chain verification error:', verifyErr);
+  }
+
   const withdrawal: WithdrawalRequest = {
     id: docId,
     user_id: userId,
@@ -813,9 +891,13 @@ export async function createWithdrawalFirestore(params: {
     fee_percent: Number(feeRate),
     fee_amount: feeAmount,
     net_amount: netAmount,
-    status: 'pending',
+    status: autoApprovedStatus,
     created_at: now,
-    updated_at: now
+    updated_at: now,
+    onchain_verified: onchainVerified,
+    network: settings.blockchain_network || 'testnet',
+    tx_hash: txHash,
+    admin_note: adminNote
   };
 
   // 1. Deduct balance from user
@@ -861,8 +943,9 @@ export async function getAllWithdrawalsFirestore(): Promise<WithdrawalRequest[]>
 
 export async function adminUpdateWithdrawalStatusFirestore(
   withdrawalId: string,
-  newStatus: 'completed' | 'rejected',
-  adminNote?: string
+  newStatus: 'pending' | 'completed' | 'rejected',
+  adminNote?: string,
+  txHash?: string
 ): Promise<void> {
   const wdRef = doc(db, 'withdrawals', withdrawalId);
   const wdSnap = await getDoc(wdRef);
@@ -889,7 +972,8 @@ export async function adminUpdateWithdrawalStatusFirestore(
     {
       status: newStatus,
       admin_note: adminNote || '',
-      updated_at: now
+      updated_at: now,
+      ...(txHash ? { tx_hash: txHash } : {})
     },
     { merge: true }
   );
