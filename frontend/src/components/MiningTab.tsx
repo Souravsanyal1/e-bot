@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Clock, Sparkles, TrendingUp, Award, Power } from 'lucide-react';
+import { Zap, Clock, Sparkles, TrendingUp, Award } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { MiningState, User } from '../types';
 import { tg } from '../services/telegram';
@@ -188,39 +188,9 @@ export const MiningTab: React.FC<MiningTabProps> = ({
             muted
             playsInline
             preload="auto"
-            className={`w-full h-full object-cover transition-all duration-700 ${
-              isMining ? 'opacity-100 scale-100 brightness-105' : 'opacity-65 scale-95 brightness-75'
-            }`}
+            className="w-full h-full object-cover"
           />
-          {/* Subtle Glass Tint Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30 pointer-events-none" />
 
-          {/* Standby Ignition overlay when idle */}
-          {!isMining && (
-            <div 
-              onClick={handleAction}
-              className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex flex-col items-center justify-center cursor-pointer group"
-            >
-              <motion.div
-                animate={{ scale: [1, 1.1, 1] }}
-                transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-                className="w-12 h-12 rounded-full bg-orange-500/20 border border-orange-500/50 flex items-center justify-center text-brand-orange shadow-orange-glow group-hover:bg-orange-500/30"
-              >
-                <Power size={22} className="text-brand-orange" />
-              </motion.div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-orange-200 mt-2">
-                Tap to Ignite
-              </span>
-            </div>
-          )}
-
-          {/* Central Reactor Status Badge */}
-          <div className="absolute bottom-4 flex flex-col items-center pointer-events-none">
-            <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-black/70 backdrop-blur-md border border-orange-500/40 text-orange-300">
-              <span className={`w-1.5 h-1.5 rounded-full ${isMining ? 'bg-green-400 animate-ping' : 'bg-orange-400'}`} />
-              {isMining ? 'Mining Active' : 'Reactor Idle'}
-            </span>
-          </div>
         </motion.div>
       </div>
 
