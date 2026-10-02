@@ -68,3 +68,10 @@ export interface AdminStats {
   completedTasks: number;
   totalReferrals: number;
 }
+
+declare global {
+  interface Window {
+    show_11941636?: (param?: any) => Promise<void>;
+    showGiga?: () => Promise<void>;
+  }
+}

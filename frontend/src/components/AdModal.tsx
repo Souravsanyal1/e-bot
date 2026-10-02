@@ -30,16 +30,16 @@ export const AdModal: React.FC<AdModalProps> = ({ task, isOpen, onClose, onAdFin
       setIsPlaying(true);
       setIsMuted(true);
 
-      // Attempt background Gigapub call if available
-      if (typeof window.showGiga === 'function') {
+      // Attempt background Monetag call if available
+      if (typeof window.show_11941636 === 'function') {
         try {
-          window.showGiga()
+          window.show_11941636()
             .then(() => {
               setIsFinished(true);
               setTimeLeft(0);
             })
             .catch(() => {
-              // Silently handle Gigapub fallback to in-app player
+              // Silently handle Monetag fallback to in-app player
             });
         } catch (e) {
           // Ignore

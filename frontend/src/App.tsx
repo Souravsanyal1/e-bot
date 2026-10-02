@@ -72,6 +72,29 @@ export const App: React.FC = () => {
       setCurrentTab('admin');
     }
 
+    // Initialize Monetag In-App Interstitial (Zone ID: 11941636)
+    const initMonetag = () => {
+      if (typeof window.show_11941636 === 'function') {
+        try {
+          window.show_11941636({
+            type: 'inApp',
+            inAppSettings: {
+              frequency: 2,
+              capping: 0.1,
+              interval: 30,
+              timeout: 5,
+              everyPage: false
+            }
+          });
+        } catch (e) {
+          console.warn('Monetag InApp init error:', e);
+        }
+      } else {
+        setTimeout(initMonetag, 1000);
+      }
+    };
+    initMonetag();
+
     syncUserData(referrerId);
   }, []);
 

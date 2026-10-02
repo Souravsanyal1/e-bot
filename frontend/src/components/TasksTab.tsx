@@ -34,8 +34,31 @@ export const TasksTab: React.FC<TasksTabProps> = ({
 
     tg.haptic.impact('medium');
 
-    // If task requires watching an Ad (Sponsored Video & Gigapub Engine)
+    // If task requires watching an Ad (Monetag Zone: 11941636 Official SDK)
     if (task.ad_required) {
+      if (typeof window.show_11941636 === 'function') {
+        setLoadingTaskId(task.id);
+        try {
+          // 1. Trigger official Monetag Rewarded Interstitial
+          await window.show_11941636();
+          await handleAdFinished(task);
+          return;
+        } catch (adErr) {
+          console.warn("Monetag rewarded interstitial failed, attempting rewarded pop:", adErr);
+          try {
+            // 2. Fallback to Monetag Rewarded Popup
+            await window.show_11941636('pop');
+            await handleAdFinished(task);
+            return;
+          } catch (popErr) {
+            console.warn("Monetag pop also skipped/blocked, falling back to in-app player:", popErr);
+          }
+        } finally {
+          setLoadingTaskId(null);
+        }
+      }
+
+      // 3. Fallback native in-app cyber video player modal
       setSelectedAdTask(task);
       setIsAdOpen(true);
       return;

@@ -639,6 +639,8 @@ export async function adminBroadcastFirestore(
 }
 
 export interface AppSettings {
+  monetag_zone_id?: string;
+  monetag_enabled?: boolean;
   gigapub_app_id?: string;
   gigapub_enabled?: boolean;
 }
@@ -649,6 +651,8 @@ export async function getAppSettings(): Promise<AppSettings> {
     if (snap.exists()) {
       const data = snap.data();
       return {
+        monetag_zone_id: data.monetag_zone_id || '11941636',
+        monetag_enabled: data.monetag_enabled !== false,
         gigapub_app_id: data.gigapub_app_id || '8451',
         gigapub_enabled: data.gigapub_enabled !== false
       };
@@ -658,10 +662,14 @@ export async function getAppSettings(): Promise<AppSettings> {
   }
 
   // Fallback to localStorage or defaults
+  const localMonetagZone = localStorage.getItem('eforce_monetag_zone_id') || '11941636';
+  const localMonetagEnabled = localStorage.getItem('eforce_monetag_enabled') !== 'false';
   const localAppId = localStorage.getItem('eforce_gigapub_app_id') || '8451';
   const localEnabled = localStorage.getItem('eforce_gigapub_enabled') !== 'false';
 
   return {
+    monetag_zone_id: localMonetagZone,
+    monetag_enabled: localMonetagEnabled,
     gigapub_app_id: localAppId,
     gigapub_enabled: localEnabled
   };
@@ -675,6 +683,12 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
     console.warn('Failed to save settings to firestore:', e);
   }
 
+  if (settings.monetag_zone_id !== undefined) {
+    localStorage.setItem('eforce_monetag_zone_id', settings.monetag_zone_id);
+  }
+  if (settings.monetag_enabled !== undefined) {
+    localStorage.setItem('eforce_monetag_enabled', String(settings.monetag_enabled));
+  }
   if (settings.gigapub_app_id !== undefined) {
     localStorage.setItem('eforce_gigapub_app_id', settings.gigapub_app_id);
   }
