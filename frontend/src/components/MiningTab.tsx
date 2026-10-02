@@ -182,23 +182,24 @@ export const MiningTab: React.FC<MiningTabProps> = ({
           </defs>
         </svg>
 
-        {/* Central Video Reactor (Using Change_video_logo_background_colors video asset) */}
+        {/* Central Video Reactor: Katana character with shining katana effect */}
         <motion.div
           animate={isMining ? { scale: [1, 1.03, 1] } : {}}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute w-[228px] h-[228px] rounded-full overflow-hidden border-2 border-white/80 shadow-[0_0_30px_rgba(255,120,0,0.65),inset_0_0_20px_rgba(255,174,0,0.35)] flex items-center justify-center bg-black cursor-pointer"
+          className="absolute w-[228px] h-[228px] rounded-full overflow-hidden border-2 border-white/80 shadow-[0_0_30px_rgba(255,120,0,0.65),inset_0_0_20px_rgba(255,174,0,0.35)] flex items-center justify-center bg-white cursor-pointer"
           onClick={handleAction}
         >
           <video
             ref={videoRef}
-            src="/Change_video_logo_background_colors_20261002102002.mp4"
+            src="/Katana_er_moddhe_sining_effet_20261001211343.mp4"
+            poster="/katana_poster.png"
             autoPlay
             loop
             muted
             playsInline
             preload="auto"
             className={`w-full h-full object-cover transition-all duration-500 ${
-              isMining ? 'brightness-110 saturate-125' : 'brightness-95'
+              isMining ? 'brightness-110 saturate-125' : 'brightness-100'
             }`}
           />
         </motion.div>
