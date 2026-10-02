@@ -142,44 +142,50 @@ export const MiningTab: React.FC<MiningTabProps> = ({
 
       {/* 3D Circular Energy Reactor with Katana Video Asset */}
       <div className="relative my-4 flex items-center justify-center">
-        {/* Ambient Orange Glow Ring */}
-        <div className="absolute w-72 h-72 rounded-full bg-gradient-to-tr from-brand-orange/20 via-orange-600/15 to-transparent blur-2xl pointer-events-none" />
+        {/* Ambient Orange & White Cyber Glow Aura */}
+        <div className="absolute w-72 h-72 rounded-full bg-gradient-to-tr from-brand-orange/35 via-amber-400/25 to-white/20 blur-2xl pointer-events-none animate-pulse" />
+
+        {/* Outer Cyber Energy Ring Accent */}
+        <div className="absolute w-[246px] h-[246px] rounded-full border border-orange-500/30 shadow-[0_0_20px_rgba(255,106,0,0.3)] pointer-events-none" />
 
         {/* Circular Progress SVG */}
-        <svg className="w-64 h-64 -rotate-90 transform" viewBox="0 0 260 260">
+        <svg className="w-64 h-64 -rotate-90 transform relative z-10 pointer-events-none" viewBox="0 0 256 256">
           <circle
-            cx="130"
-            cy="130"
-            r="115"
-            stroke="rgba(255, 255, 255, 0.08)"
-            strokeWidth="8"
+            cx="128"
+            cy="128"
+            r="116"
+            stroke="rgba(255, 174, 0, 0.25)"
+            strokeWidth="6"
             fill="transparent"
           />
           <motion.circle
-            cx="130"
-            cy="130"
-            r="115"
+            cx="128"
+            cy="128"
+            r="116"
             stroke="url(#orangeGradient)"
-            strokeWidth="8"
-            strokeDasharray={2 * Math.PI * 115}
-            strokeDashoffset={2 * Math.PI * 115 * (1 - progressPercent / 100)}
+            strokeWidth="6"
+            strokeDasharray={2 * Math.PI * 116}
+            strokeDashoffset={2 * Math.PI * 116 * (1 - progressPercent / 100)}
             strokeLinecap="round"
             fill="transparent"
             transition={{ duration: 0.5, ease: 'easeOut' }}
           />
           <defs>
             <linearGradient id="orangeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#FFAE00" />
-              <stop offset="50%" stopColor="#FF5E00" />
+              <stop offset="0%" stopColor="#FFFFFF" />
+              <stop offset="30%" stopColor="#FFAE00" />
+              <stop offset="70%" stopColor="#FF5E00" />
               <stop offset="100%" stopColor="#FF2A00" />
             </linearGradient>
           </defs>
         </svg>
 
+        {/* Central Video Reactor (Seamlessly fills the inner ring with zero black gap) */}
         <motion.div
           animate={isMining ? { scale: [1, 1.02, 1] } : {}}
           transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute w-52 h-52 rounded-full overflow-hidden border-2 border-white/20 shadow-orange-glow-lg flex items-center justify-center bg-black"
+          className="absolute w-[228px] h-[228px] rounded-full overflow-hidden border-2 border-white/80 shadow-[0_0_30px_rgba(255,120,0,0.65),inset_0_0_20px_rgba(255,174,0,0.35)] flex items-center justify-center bg-white cursor-pointer"
+          onClick={handleAction}
         >
           <video
             ref={videoRef}
@@ -190,7 +196,6 @@ export const MiningTab: React.FC<MiningTabProps> = ({
             preload="auto"
             className="w-full h-full object-cover"
           />
-
         </motion.div>
       </div>
 
