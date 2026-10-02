@@ -13,7 +13,7 @@ import { tg } from './services/telegram';
 import type { User, MiningState, Task, ReferralData, LeaderboardUser } from './types';
 
 export const App: React.FC = () => {
-  const [currentTab, setCurrentTab] = useState<TabType>('mining');
+  const [currentTab, setCurrentTab] = useState<TabType | 'admin'>('mining');
   const [user, setUser] = useState<User | null>(null);
   const [mining, setMining] = useState<MiningState | null>(null);
   const [standardTasks, setStandardTasks] = useState<Task[]>([]);
@@ -235,7 +235,6 @@ export const App: React.FC = () => {
       <BottomNav
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
-        isAdmin={Boolean(user?.is_admin)}
       />
     </div>
   );

@@ -1,23 +1,21 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Pickaxe, CheckSquare, Users, Trophy, ShieldAlert } from 'lucide-react';
+import { Pickaxe, CheckSquare, Users, Trophy } from 'lucide-react';
 import { tg } from '../services/telegram';
 
-export type TabType = 'mining' | 'tasks' | 'friends' | 'leaderboard' | 'admin';
+export type TabType = 'mining' | 'tasks' | 'friends' | 'leaderboard';
 
 interface BottomNavProps {
-  currentTab: TabType;
+  currentTab: TabType | 'admin';
   onSelectTab: (tab: TabType) => void;
-  isAdmin: boolean;
 }
 
-export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, isAdmin }) => {
+export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab }) => {
   const tabs = [
     { id: 'mining' as TabType, label: 'Mining', icon: Pickaxe },
     { id: 'tasks' as TabType, label: 'Tasks', icon: CheckSquare },
     { id: 'friends' as TabType, label: 'Friends', icon: Users },
     { id: 'leaderboard' as TabType, label: 'Rank', icon: Trophy },
-    ...(isAdmin ? [{ id: 'admin' as TabType, label: 'Admin', icon: ShieldAlert }] : []),
   ];
 
   const handleTabClick = (tabId: TabType) => {

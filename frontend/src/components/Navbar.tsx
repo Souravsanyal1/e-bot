@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Zap, ShieldCheck } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import type { User } from '../types';
 
 interface NavbarProps {
@@ -29,11 +29,6 @@ export const Navbar: React.FC<NavbarProps> = ({ user, activeSpeed }) => {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-sm tracking-wide text-white">E-FORCE</span>
-              {user?.is_admin && (
-                <span className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                  <ShieldCheck size={10} /> ADMIN
-                </span>
-              )}
             </div>
             <div className="text-[11px] text-gray-400 flex items-center gap-1">
               <span>{user?.first_name || 'Miner'}</span>
