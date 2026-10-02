@@ -9,6 +9,7 @@ import { config, isAdmin } from './config.js';
 import { initDatabase, db } from './db/index.js';
 import { initRedis, cache } from './redis.js';
 import { initBot, broadcastMessage } from './bot.js';
+import { firestoreDB } from './firebase.js';
 import { calculateMiningState, startMiningSession, claimMiningSession } from './services/mining.js';
 import { getTasksForUser, completeTask } from './services/tasks.js';
 
@@ -138,6 +139,22 @@ async function startServer() {
         VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [user.id, user.username || '', user.first_name || '', user.last_name || '', 0.0, config.BASE_MINING_RATE, validRef]);
 
+      // Sync to Cloud Firestore
+      try {
+        await firestoreDB.setUser(user.id, {
+          username: user.username || '',
+          first_name: user.first_name || 'Miner',
+          last_name: user.last_name || '',
+          balance: 0.0,
+          speed_per_hr: config.BASE_MINING_RATE,
+          referral_count: 0,
+          referred_by: validRef,
+          is_banned: false
+        });
+      } catch (fErr) {
+        console.warn('Firestore sync error:', fErr.message);
+      }
+
       // If valid referrer, reward them
       if (validRef) {
         const ref = await db.get('SELECT * FROM users WHERE id = $1', [validRef]);
@@ -146,6 +163,17 @@ async function startServer() {
           const newBal = Number(ref.balance || 0) + config.REFERRAL_COIN_BONUS;
           await db.run('UPDATE users SET referral_count = referral_count + 1, speed_per_hr = $1, balance = $2 WHERE id = $3', [newSpeed, newBal, validRef]);
           await db.run('INSERT INTO referrals (referrer_id, referred_id, bonus_coins, speed_boost) VALUES ($1, $2, $3, $4)', [validRef, user.id, config.REFERRAL_COIN_BONUS, config.REFERRAL_SPEED_BOOST]);
+
+          try {
+            await firestoreDB.setUser(validRef, {
+              referral_count: (ref.referral_count || 0) + 1,
+              speed_per_hr: newSpeed,
+              balance: newBal
+            });
+            await firestoreDB.addReferral(validRef, user.id, config.REFERRAL_COIN_BONUS, config.REFERRAL_SPEED_BOOST);
+          } catch (fErr) {
+            console.warn('Firestore referral sync error:', fErr.message);
+          }
         }
       }
 

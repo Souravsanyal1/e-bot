@@ -8,7 +8,16 @@ import { TasksTab } from './components/TasksTab';
 import { FriendsTab } from './components/FriendsTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
 import { AdminTab } from './components/AdminTab';
-import { api } from './services/api';
+import { 
+  syncUserFirestore, 
+  startMiningFirestore, 
+  claimMiningFirestore, 
+  getTasksFirestore, 
+  completeTaskFirestore, 
+  getReferralsFirestore, 
+  getLeaderboardFirestore, 
+  subscribeToUserFirestore 
+} from './services/firestore';
 import { tg } from './services/telegram';
 import type { User, MiningState, Task, ReferralData, LeaderboardUser } from './types';
 
@@ -21,7 +30,7 @@ export const App: React.FC = () => {
   const [referrals, setReferrals] = useState<ReferralData | null>(null);
   const [topMiners, setTopMiners] = useState<LeaderboardUser[]>([]);
 
-  // Initialize Telegram & Sync Profile
+  // Initialize Telegram & Sync Profile with Cloud Firestore
   useEffect(() => {
     tg.init();
 
@@ -49,14 +58,19 @@ export const App: React.FC = () => {
   }, []);
 
   const syncUserData = async (refId?: number, forceAdmin?: boolean) => {
+    const tgUser = tg.getUser();
     try {
-      const data = await api.syncUser(refId);
-      // Strictly non-admin for normal users; only admin if verified in backend ADMIN_IDS
-      setUser({ ...data.user, is_admin: Boolean(forceAdmin || data.user.is_admin) });
-      setMining(data.mining);
+      // 1. Primary: Cloud Firestore Sync
+      const firestoreData = await syncUserFirestore(tgUser, refId);
+      setUser({ ...firestoreData.user, is_admin: Boolean(forceAdmin) });
+      setMining(firestoreData.mining);
+
+      // 2. Real-time Firestore balance & speed subscription
+      subscribeToUserFirestore(tgUser.id, (freshUser) => {
+        setUser(prev => prev ? { ...prev, balance: freshUser.balance, speed_per_hr: freshUser.speed_per_hr } : freshUser);
+      });
     } catch (e: any) {
-      console.warn('Backend sync pending, initializing real session:', e);
-      const tgUser = tg.getUser();
+      console.warn('Firestore primary sync fallback:', e);
       setUser({
         id: tgUser.id,
         username: tgUser.username || '',
@@ -78,16 +92,17 @@ export const App: React.FC = () => {
         total_balance: 0.0
       });
     } finally {
-      loadTabContent();
+      loadTabContent(tgUser.id);
     }
   };
 
-  const loadTabContent = async () => {
+  const loadTabContent = async (userId?: number) => {
+    const activeUserId = userId || user?.id || tg.getUser().id;
     try {
       const [tasksData, refData, leadersData] = await Promise.all([
-        api.getTasks().catch(() => ({ standard: [], special: [] })),
-        api.getReferrals().catch(() => null),
-        api.getLeaderboard().catch(() => ({ topMiners: [] }))
+        getTasksFirestore(activeUserId).catch(() => ({ standard: [], special: [] })),
+        getReferralsFirestore(activeUserId).catch(() => null),
+        getLeaderboardFirestore().catch(() => ({ topMiners: [] }))
       ]);
 
       setStandardTasks(tasksData.standard);
@@ -99,38 +114,38 @@ export const App: React.FC = () => {
     }
   };
 
-  // Mining Actions
+  // Mining Actions via Cloud Firestore
   const handleStartMining = async () => {
+    if (!user) return;
     try {
-      const res = await api.startMining();
-      setMining(res.mining);
+      const freshMining = await startMiningFirestore(user.id, user.speed_per_hr || 0.5);
+      setMining(freshMining);
     } catch (e) {
-      // Dev mode local update
       setMining(prev => prev ? { ...prev, is_mining: true, status: 'mining', remaining_seconds: 86400 } : null);
     }
   };
 
   const handleClaimMining = async () => {
+    if (!user) return;
     try {
-      const res = await api.claimMining();
-      setMining(res.mining_state);
-      setUser(prev => prev ? { ...prev, balance: res.new_balance } : null);
-    } catch (e) {
-      // Dev mode local update
-      setUser(prev => prev ? { ...prev, balance: (prev.balance || 0) + (mining?.mined_unclaimed || 0) } : null);
-      setMining(prev => prev ? { ...prev, mined_unclaimed: 0, remaining_seconds: 86400 } : null);
+      const res = await claimMiningFirestore(user.id, user.speed_per_hr || 0.5);
+      setMining(res.mining);
+      setUser(prev => prev ? { ...prev, balance: res.balance } : null);
+    } catch (e: any) {
+      console.warn('Claim error:', e.message);
     }
   };
 
-  // Task Actions
+  // Task Actions via Cloud Firestore
   const handleCompleteTask = async (taskId: number) => {
+    if (!user) return;
     try {
-      const res = await api.completeTask(taskId);
-      setUser(prev => prev ? { ...prev, balance: res.newBalance, speed_per_hr: res.newSpeed } : null);
+      const res = await completeTaskFirestore(user.id, taskId);
+      setUser(prev => prev ? { ...prev, balance: res.new_balance, speed_per_hr: res.new_speed } : null);
       if (mining) {
-        setMining({ ...mining, speed_per_hr: res.newSpeed });
+        setMining({ ...mining, speed_per_hr: res.new_speed });
       }
-      loadTabContent();
+      loadTabContent(user.id);
     } catch (e: any) {
       alert(e.message);
     }

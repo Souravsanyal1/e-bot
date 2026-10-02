@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard } from 'grammy';
 import { config, isAdmin } from './config.js';
 import { db } from './db/index.js';
+import { firestoreDB } from './firebase.js';
 
 let bot = null;
 
@@ -38,11 +39,27 @@ export function initBot() {
       let existingUser = await db.get('SELECT * FROM users WHERE id = $1', [userId]);
 
       if (!existingUser) {
-        // Register new user
+        // Register new user in SQLite
         await db.run(`
           INSERT INTO users (id, username, first_name, last_name, balance, speed_per_hr, referred_by)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
         `, [userId, username, firstName, lastName, 0.0, config.BASE_MINING_RATE, referrerId]);
+
+        // Register new user in Cloud Firestore
+        try {
+          await firestoreDB.setUser(userId, {
+            username,
+            first_name: firstName,
+            last_name: lastName,
+            balance: 0.0,
+            speed_per_hr: config.BASE_MINING_RATE,
+            referral_count: 0,
+            referred_by: referrerId,
+            is_banned: false
+          });
+        } catch (fErr) {
+          console.warn('Firestore bot sync error:', fErr.message);
+        }
 
         // Process referral if applicable
         if (referrerId) {
@@ -64,6 +81,18 @@ export function initBot() {
               INSERT INTO referrals (referrer_id, referred_id, bonus_coins, speed_boost)
               VALUES ($1, $2, $3, $4)
             `, [referrerId, userId, config.REFERRAL_COIN_BONUS, config.REFERRAL_SPEED_BOOST]);
+
+            // Record in Cloud Firestore
+            try {
+              await firestoreDB.setUser(referrerId, {
+                referral_count: newReferralCount,
+                speed_per_hr: newSpeed,
+                balance: newBalance
+              });
+              await firestoreDB.addReferral(referrerId, userId, config.REFERRAL_COIN_BONUS, config.REFERRAL_SPEED_BOOST);
+            } catch (fErr) {
+              console.warn('Firestore referral sync error:', fErr.message);
+            }
 
             // Send instant DM notification to referrer
             try {
