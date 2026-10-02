@@ -29,7 +29,8 @@ export const TasksTab: React.FC<TasksTabProps> = ({
   const [loadingTaskId, setLoadingTaskId] = useState<number | null>(null);
 
   const handleTaskClick = async (task: Task) => {
-    if (task.is_completed) return;
+    // Standard link tasks complete once, but sponsored ad tasks can be watched repeatedly for boosts!
+    if (task.is_completed && !task.ad_required) return;
 
     tg.haptic.impact('medium');
 
@@ -132,17 +133,17 @@ export const TasksTab: React.FC<TasksTabProps> = ({
             {displayedSpecial.map((task) => (
               <motion.div
                 key={task.id}
-                whileTap={task.is_completed ? {} : { scale: 0.98 }}
+                whileTap={task.is_completed && !task.ad_required ? {} : { scale: 0.98 }}
                 onClick={() => handleTaskClick(task)}
                 className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
-                  task.is_completed
+                  task.is_completed && !task.ad_required
                     ? 'bg-white/5 border-white/10 opacity-60'
                     : 'bg-gradient-to-r from-orange-500/15 via-[#181826] to-[#12131A] border-orange-500/40 shadow-sm hover:border-orange-400'
                 }`}
               >
                 <div className="flex items-center gap-3 pr-2">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                    task.is_completed ? 'bg-white/10 text-gray-400' : 'bg-orange-500/20 text-brand-orange border border-orange-500/30'
+                    task.is_completed && !task.ad_required ? 'bg-white/10 text-gray-400' : 'bg-orange-500/20 text-brand-orange border border-orange-500/30'
                   }`}>
                     {task.ad_required ? <PlayCircle size={20} /> : <Zap size={20} />}
                   </div>
@@ -152,7 +153,7 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                       <h4 className="text-xs font-bold text-white line-clamp-1">{task.title}</h4>
                       {task.ad_required && (
                         <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-red-500/20 text-red-400 border border-red-500/30">
-                          AD
+                          SPONSORED AD
                         </span>
                       )}
                     </div>
@@ -168,21 +169,21 @@ export const TasksTab: React.FC<TasksTabProps> = ({
 
                 {/* Status CTA */}
                 <div className="shrink-0">
-                  {task.is_completed ? (
+                  {task.is_completed && !task.ad_required ? (
                     <div className="flex items-center gap-1 text-green-400 font-bold text-xs bg-green-500/10 px-2.5 py-1 rounded-xl border border-green-500/20">
                       <CheckCircle2 size={14} /> Done
                     </div>
                   ) : (
                     <button
                       disabled={loadingTaskId === task.id}
-                      className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-black bg-gradient-to-r from-white via-orange-100 to-brand-orange shadow-sm flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-black bg-gradient-to-r from-white via-orange-100 to-brand-orange shadow-sm flex items-center gap-1 cursor-pointer"
                     >
                       {loadingTaskId === task.id ? (
                         <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
                       ) : task.ad_required ? (
                         <>
                           <PlayCircle size={13} />
-                          <span>Watch</span>
+                          <span>{task.is_completed ? 'Watch Again' : 'Watch'}</span>
                         </>
                       ) : (
                         <>
@@ -213,19 +214,19 @@ export const TasksTab: React.FC<TasksTabProps> = ({
             {displayedStandard.map((task) => (
               <motion.div
                 key={task.id}
-                whileTap={task.is_completed ? {} : { scale: 0.98 }}
+                whileTap={task.is_completed && !task.ad_required ? {} : { scale: 0.98 }}
                 onClick={() => handleTaskClick(task)}
                 className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
-                  task.is_completed
+                  task.is_completed && !task.ad_required
                     ? 'bg-white/5 border-white/10 opacity-60'
                     : 'bg-[#12131A] border-white/10 hover:border-white/20'
                 }`}
               >
                 <div className="flex items-center gap-3 pr-2">
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                    task.is_completed ? 'bg-white/10 text-gray-400' : 'bg-white/5 text-white border border-white/10'
+                    task.is_completed && !task.ad_required ? 'bg-white/10 text-gray-400' : 'bg-white/5 text-white border border-white/10'
                   }`}>
-                    {task.ad_required ? <PlayCircle size={18} /> : <ExternalLink size={18} />}
+                    {task.ad_required ? <PlayCircle size={18} className="text-brand-orange" /> : <ExternalLink size={18} />}
                   </div>
 
                   <div>
@@ -233,7 +234,7 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                       <h4 className="text-xs font-bold text-white line-clamp-1">{task.title}</h4>
                       {task.ad_required && (
                         <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-orange-500/20 text-orange-400">
-                          AD
+                          SPONSORED AD
                         </span>
                       )}
                     </div>
@@ -247,19 +248,22 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                 </div>
 
                 <div className="shrink-0">
-                  {task.is_completed ? (
+                  {task.is_completed && !task.ad_required ? (
                     <div className="flex items-center gap-1 text-green-400 font-bold text-xs bg-green-500/10 px-2 py-1 rounded-xl">
                       <CheckCircle2 size={13} /> Done
                     </div>
                   ) : (
                     <button
                       disabled={loadingTaskId === task.id}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/20 border border-white/15 transition-all flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/20 border border-white/15 transition-all flex items-center gap-1 cursor-pointer"
                     >
                       {loadingTaskId === task.id ? (
                         <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       ) : task.ad_required ? (
-                        <span>Watch</span>
+                        <>
+                          <PlayCircle size={13} className="text-brand-orange" />
+                          <span>{task.is_completed ? 'Watch Again' : 'Watch'}</span>
+                        </>
                       ) : (
                         <span>Do Task</span>
                       )}

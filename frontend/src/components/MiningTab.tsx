@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Clock, Sparkles, TrendingUp, Award } from 'lucide-react';
+import { Zap, Clock, Sparkles, TrendingUp, Award, PlayCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { MiningState, User } from '../types';
 import { tg } from '../services/telegram';
@@ -300,14 +300,14 @@ export const MiningTab: React.FC<MiningTabProps> = ({
         <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-white/5">
           <button
             onClick={onNavigateToTasks}
-            className="py-2 px-3 rounded-xl bg-orange-500/15 border border-orange-500/30 text-xs font-bold text-orange-300 hover:bg-orange-500/25 transition-all text-center flex items-center justify-center gap-1"
+            className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-orange-500/25 to-amber-500/20 border border-orange-500/40 text-xs font-black text-white hover:bg-orange-500/30 transition-all text-center flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
           >
-            <Sparkles size={12} />
-            <span>Complete Tasks</span>
+            <PlayCircle size={13} className="text-brand-orange animate-pulse" />
+            <span>Watch Ads & Boost</span>
           </button>
           <button
             onClick={onNavigateToFriends}
-            className="py-2 px-3 rounded-xl bg-white/10 border border-white/15 text-xs font-bold text-white hover:bg-white/15 transition-all text-center flex items-center justify-center gap-1"
+            className="py-2.5 px-3 rounded-xl bg-white/10 border border-white/15 text-xs font-bold text-white hover:bg-white/15 transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
           >
             <span>Invite Friends (+0.05)</span>
           </button>
