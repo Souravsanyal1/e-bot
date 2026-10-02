@@ -151,6 +151,11 @@ export const App: React.FC = () => {
     }
   };
 
+  // Full Desktop Command Center View for Admin
+  if (currentTab === 'admin') {
+    return <AdminTab onExit={() => setCurrentTab('mining')} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white flex flex-col font-sans relative overflow-x-hidden">
       {/* Dynamic Ambient Orange Glows */}
@@ -229,18 +234,6 @@ export const App: React.FC = () => {
                 topMiners={topMiners}
                 currentUser={user}
               />
-            </motion.div>
-          )}
-
-          {currentTab === 'admin' && (
-            <motion.div
-              key="admin"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <AdminTab />
             </motion.div>
           )}
         </AnimatePresence>

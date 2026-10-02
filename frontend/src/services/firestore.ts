@@ -7,7 +7,8 @@ import {
   query, 
   where, 
   limit, 
-  onSnapshot 
+  onSnapshot,
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { User, MiningState, Task, ReferralData, LeaderboardUser } from '../types';
@@ -460,3 +461,180 @@ export function subscribeToUserFirestore(userId: number, callback: (user: User) 
     }
   });
 }
+
+// ==========================================
+// 9. ADMIN PANEL DIRECT FIRESTORE HELPERS
+// ==========================================
+
+export const BOT_TOKEN = '8826126541:AAG_8ZxcBe9zQ40wqf-bUUROZAufCt2vnqw';
+
+// Fetch aggregate statistics from Cloud Firestore
+export async function getAdminStatsFirestore() {
+  try {
+    const [usersSnap, tasksSnap, userTasksSnap, referralsSnap] = await Promise.all([
+      getDocs(collection(db, 'users')),
+      getDocs(collection(db, 'tasks')),
+      getDocs(collection(db, 'user_tasks')),
+      getDocs(collection(db, 'referrals'))
+    ]);
+
+    let totalMinedTokens = 0;
+    usersSnap.forEach(d => {
+      totalMinedTokens += Number(d.data().balance || 0);
+    });
+
+    return {
+      totalUsers: usersSnap.size,
+      totalMinedTokens: Number(totalMinedTokens.toFixed(4)),
+      activeTasks: tasksSnap.size,
+      completedTasks: userTasksSnap.size,
+      totalReferrals: referralsSnap.size
+    };
+  } catch (err) {
+    console.warn('getAdminStatsFirestore error:', err);
+    return {
+      totalUsers: 0,
+      totalMinedTokens: 0,
+      activeTasks: 0,
+      completedTasks: 0,
+      totalReferrals: 0
+    };
+  }
+}
+
+// Fetch all users with search filter
+export async function getAdminUsersFirestore(search?: string) {
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    let users = snap.docs.map(d => d.data());
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      users = users.filter(u => 
+        String(u.id).includes(q) || 
+        (u.username && u.username.toLowerCase().includes(q)) ||
+        (u.first_name && u.first_name.toLowerCase().includes(q))
+      );
+    }
+
+    return users.sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
+  } catch (err) {
+    console.warn('getAdminUsersFirestore error:', err);
+    return [];
+  }
+}
+
+// Ban or unban user in Firestore
+export async function adminBanUserFirestore(userId: number, ban: boolean) {
+  const userRef = doc(db, 'users', String(userId));
+  await setDoc(userRef, {
+    is_banned: ban,
+    updated_at: new Date().toISOString()
+  }, { merge: true });
+}
+
+// Boost user speed and add bonus coins
+export async function adminBoostUserFirestore(userId: number, addSpeed: number, addCoins: number) {
+  const userRef = doc(db, 'users', String(userId));
+  const snap = await getDoc(userRef);
+  if (!snap.exists()) throw new Error('User not found');
+
+  const data = snap.data();
+  const currentSpeed = Number(data.speed_per_hr || BASE_MINING_RATE);
+  const currentBalance = Number(data.balance || 0);
+
+  const newSpeed = Number((currentSpeed + addSpeed).toFixed(4));
+  const newBalance = Number((currentBalance + addCoins).toFixed(4));
+
+  await setDoc(userRef, {
+    speed_per_hr: newSpeed,
+    balance: newBalance,
+    updated_at: new Date().toISOString()
+  }, { merge: true });
+
+  return { newSpeed, newBalance };
+}
+
+// Create a new task in Firestore
+export async function adminCreateTaskFirestore(taskData: {
+  title: string;
+  description: string;
+  reward_coins: number;
+  speed_boost: number;
+  task_type: 'standard' | 'special';
+  action_type: 'link' | 'telegram' | 'ad';
+  link: string;
+  ad_required: boolean;
+  wait_time_sec: number;
+}) {
+  const taskId = String(Date.now());
+  const taskRef = doc(db, 'tasks', taskId);
+  const newTask = {
+    ...taskData,
+    id: taskId,
+    created_at: new Date().toISOString()
+  };
+  await setDoc(taskRef, newTask);
+  return newTask;
+}
+
+// Delete a task in Firestore
+export async function adminDeleteTaskFirestore(taskId: string | number) {
+  const taskRef = doc(db, 'tasks', String(taskId));
+  await deleteDoc(taskRef);
+}
+
+// Direct Telegram Bot Broadcast from client via official Telegram Bot API
+export async function adminBroadcastFirestore(
+  messageText: string,
+  photoUrl?: string,
+  onProgress?: (sent: number, total: number) => void
+) {
+  const snap = await getDocs(collection(db, 'users'));
+  const users = snap.docs.map(d => d.data()).filter(u => !u.is_banned);
+
+  const total = users.length;
+  let sent = 0;
+  let failed = 0;
+
+  for (let i = 0; i < total; i++) {
+    const u = users[i];
+    try {
+      if (photoUrl && photoUrl.trim()) {
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: u.id,
+            photo: photoUrl.trim(),
+            caption: messageText,
+            parse_mode: 'HTML'
+          })
+        });
+      } else {
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: u.id,
+            text: messageText,
+            parse_mode: 'HTML'
+          })
+        });
+      }
+      sent++;
+    } catch (e) {
+      failed++;
+    }
+
+    if (onProgress) {
+      onProgress(sent, total);
+    }
+
+    // Sleep 40ms to stay within Telegram rate limits (~25-30 msgs/sec)
+    await new Promise(r => setTimeout(r, 40));
+  }
+
+  return { total, sent, failed };
+}
+
