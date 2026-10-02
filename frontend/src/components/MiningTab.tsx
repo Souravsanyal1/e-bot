@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Clock, Sparkles, TrendingUp, Award } from 'lucide-react';
+import { Zap, Clock, Sparkles, TrendingUp, Award, Power } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { MiningState, User } from '../types';
 import { tg } from '../services/telegram';
@@ -25,6 +25,21 @@ export const MiningTab: React.FC<MiningTabProps> = ({
   const [loading, setLoading] = useState(false);
   const [liveUnclaimed, setLiveUnclaimed] = useState<number>(mining?.mined_unclaimed || 0);
   const [countdown, setCountdown] = useState<number>(mining?.remaining_seconds || 86400);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const isMining = Boolean(mining?.is_mining);
+
+  // Play video only when mining is active; pause when idle
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (isMining) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  }, [isMining]);
 
   // Sync state whenever mining changes
   useEffect(() => {
@@ -89,7 +104,6 @@ export const MiningTab: React.FC<MiningTabProps> = ({
     }
   };
 
-  const isMining = mining?.is_mining;
   const isClaimable = mining?.status === 'claimable' || (isMining && liveUnclaimed >= 0.01);
   const totalBalance = (user?.balance || 0) + (isMining ? liveUnclaimed : 0);
   const progressPercent = mining ? Math.min(100, Math.max(0, ((86400 - countdown) / 86400) * 100)) : 0;
@@ -162,25 +176,46 @@ export const MiningTab: React.FC<MiningTabProps> = ({
           </defs>
         </svg>
 
-        {/* Central Core: 3D Katana Video */}
         <motion.div
           animate={isMining ? { scale: [1, 1.02, 1] } : {}}
           transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
           className="absolute w-52 h-52 rounded-full overflow-hidden border-2 border-white/20 shadow-orange-glow-lg flex items-center justify-center bg-black"
         >
           <video
+            ref={videoRef}
             src="/Katana_er_moddhe_sining_effet_20261001211343.mp4"
-            autoPlay
             loop
             muted
             playsInline
-            className="w-full h-full object-cover"
+            preload="auto"
+            className={`w-full h-full object-cover transition-all duration-700 ${
+              isMining ? 'opacity-100 scale-100 brightness-105' : 'opacity-65 scale-95 brightness-75'
+            }`}
           />
           {/* Subtle Glass Tint Overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30 pointer-events-none" />
 
+          {/* Standby Ignition overlay when idle */}
+          {!isMining && (
+            <div 
+              onClick={handleAction}
+              className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex flex-col items-center justify-center cursor-pointer group"
+            >
+              <motion.div
+                animate={{ scale: [1, 1.1, 1] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                className="w-12 h-12 rounded-full bg-orange-500/20 border border-orange-500/50 flex items-center justify-center text-brand-orange shadow-orange-glow group-hover:bg-orange-500/30"
+              >
+                <Power size={22} className="text-brand-orange" />
+              </motion.div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-orange-200 mt-2">
+                Tap to Ignite
+              </span>
+            </div>
+          )}
+
           {/* Central Reactor Status Badge */}
-          <div className="absolute bottom-4 flex flex-col items-center">
+          <div className="absolute bottom-4 flex flex-col items-center pointer-events-none">
             <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-black/70 backdrop-blur-md border border-orange-500/40 text-orange-300">
               <span className={`w-1.5 h-1.5 rounded-full ${isMining ? 'bg-green-400 animate-ping' : 'bg-orange-400'}`} />
               {isMining ? 'Mining Active' : 'Reactor Idle'}
