@@ -34,25 +34,25 @@ export const App: React.FC = () => {
       if (!isNaN(parsed)) referrerId = parsed;
     }
 
-    // Check admin query param or hash
+    // Optional private admin access strictly protected by PIN
     const hasAdminParam = searchParams.get('admin') === 'true' || window.location.hash.includes('admin');
+    let isPrivilegedAdmin = false;
     if (hasAdminParam) {
-      setCurrentTab('admin');
+      const pin = prompt('Enter Admin Security PIN:');
+      if (pin === 'eforce2026') {
+        isPrivilegedAdmin = true;
+        setCurrentTab('admin');
+      }
     }
 
-    syncUserData(referrerId, hasAdminParam);
+    syncUserData(referrerId, isPrivilegedAdmin);
   }, []);
-
-  const handleToggleAdmin = () => {
-    tg.haptic.notification('success');
-    setUser(prev => prev ? { ...prev, is_admin: !prev.is_admin } : null);
-    setCurrentTab(prev => (prev === 'admin' ? 'mining' : 'admin'));
-  };
 
   const syncUserData = async (refId?: number, forceAdmin?: boolean) => {
     try {
       const data = await api.syncUser(refId);
-      setUser(forceAdmin ? { ...data.user, is_admin: true } : data.user);
+      // Strictly non-admin for normal users; only admin if verified in backend ADMIN_IDS
+      setUser({ ...data.user, is_admin: Boolean(forceAdmin || data.user.is_admin) });
       setMining(data.mining);
     } catch (e: any) {
       console.warn('Backend sync pending, initializing real session:', e);
@@ -146,7 +146,6 @@ export const App: React.FC = () => {
       <Navbar
         user={user}
         activeSpeed={mining?.speed_per_hr || user?.speed_per_hr || 0.5}
-        onToggleAdmin={handleToggleAdmin}
       />
 
       {/* Main Tab Router View */}

@@ -6,29 +6,14 @@ import type { User } from '../types';
 interface NavbarProps {
   user: User | null;
   activeSpeed: number;
-  onToggleAdmin?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ user, activeSpeed, onToggleAdmin }) => {
-  const [tapCount, setTapCount] = React.useState(0);
-
-  const handleBrandTap = () => {
-    const nextCount = tapCount + 1;
-    setTapCount(nextCount);
-    if (nextCount >= 3) {
-      setTapCount(0);
-      onToggleAdmin?.();
-    }
-  };
-
+export const Navbar: React.FC<NavbarProps> = ({ user, activeSpeed }) => {
   return (
     <header className="sticky top-0 z-40 w-full px-4 py-3 bg-[#0A0A0F]/85 backdrop-blur-md border-b border-white/10">
       <div className="max-w-md mx-auto flex items-center justify-between">
-        {/* Brand & User Identity (Tap 3 times to unlock Admin) */}
-        <div 
-          onClick={handleBrandTap}
-          className="flex items-center gap-3 cursor-pointer select-none"
-        >
+        {/* Brand & User Identity */}
+        <div className="flex items-center gap-3 select-none">
           <div className="relative w-10 h-10 rounded-xl overflow-hidden p-[1px] bg-gradient-to-tr from-brand-orange to-white/40 shadow-orange-glow">
             <div className="w-full h-full bg-[#12131A] rounded-[11px] flex items-center justify-center overflow-hidden">
               <video 
