@@ -63,6 +63,24 @@ export interface LeaderboardUser {
   photo_url?: string;
 }
 
+export interface WithdrawalRequest {
+  id: string;
+  user_id: number;
+  user_name: string;
+  username: string;
+  wallet_address: string;
+  refer_code: string;
+  amount: number;
+  fee_percent: number;
+  fee_amount: number;
+  net_amount: number;
+  status: 'pending' | 'completed' | 'rejected';
+  created_at: string;
+  updated_at?: string;
+  tx_hash?: string;
+  admin_note?: string;
+}
+
 export interface AdminStats {
   totalUsers: number;
   totalMinedTokens: number;
@@ -70,6 +88,8 @@ export interface AdminStats {
   completedTasks: number;
   totalReferrals: number;
 }
+
+export type TabType = 'mining' | 'tasks' | 'withdraw' | 'friends' | 'leaderboard';
 
 declare global {
   interface Window {

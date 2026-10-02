@@ -11,7 +11,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { User, MiningState, Task, ReferralData, LeaderboardUser } from '../types';
+import type { User, MiningState, Task, ReferralData, LeaderboardUser, WithdrawalRequest } from '../types';
 
 const BASE_MINING_RATE = 0.5; // E-FORCE per hour
 const SESSION_DURATION_HOURS = 24;
@@ -672,6 +672,9 @@ export interface AppSettings {
   monetag_enabled?: boolean;
   gigapub_app_id?: string;
   gigapub_enabled?: boolean;
+  withdraw_fee_percent?: number;
+  min_withdraw_amount?: number;
+  withdraw_enabled?: boolean;
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
@@ -683,7 +686,10 @@ export async function getAppSettings(): Promise<AppSettings> {
         monetag_zone_id: data.monetag_zone_id || '11941636',
         monetag_enabled: data.monetag_enabled !== false,
         gigapub_app_id: data.gigapub_app_id || '8451',
-        gigapub_enabled: data.gigapub_enabled !== false
+        gigapub_enabled: data.gigapub_enabled !== false,
+        withdraw_fee_percent: data.withdraw_fee_percent !== undefined ? Number(data.withdraw_fee_percent) : 5,
+        min_withdraw_amount: data.min_withdraw_amount !== undefined ? Number(data.min_withdraw_amount) : 50,
+        withdraw_enabled: data.withdraw_enabled !== false
       };
     }
   } catch (e) {
@@ -695,12 +701,17 @@ export async function getAppSettings(): Promise<AppSettings> {
   const localMonetagEnabled = localStorage.getItem('eforce_monetag_enabled') !== 'false';
   const localAppId = localStorage.getItem('eforce_gigapub_app_id') || '8451';
   const localEnabled = localStorage.getItem('eforce_gigapub_enabled') !== 'false';
+  const localFee = localStorage.getItem('eforce_withdraw_fee') ? Number(localStorage.getItem('eforce_withdraw_fee')) : 5;
+  const localMin = localStorage.getItem('eforce_min_withdraw') ? Number(localStorage.getItem('eforce_min_withdraw')) : 50;
 
   return {
     monetag_zone_id: localMonetagZone,
     monetag_enabled: localMonetagEnabled,
     gigapub_app_id: localAppId,
-    gigapub_enabled: localEnabled
+    gigapub_enabled: localEnabled,
+    withdraw_fee_percent: localFee,
+    min_withdraw_amount: localMin,
+    withdraw_enabled: true
   };
 }
 
@@ -724,5 +735,163 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
   if (settings.gigapub_enabled !== undefined) {
     localStorage.setItem('eforce_gigapub_enabled', String(settings.gigapub_enabled));
   }
+  if (settings.withdraw_fee_percent !== undefined) {
+    localStorage.setItem('eforce_withdraw_fee', String(settings.withdraw_fee_percent));
+  }
+  if (settings.min_withdraw_amount !== undefined) {
+    localStorage.setItem('eforce_min_withdraw', String(settings.min_withdraw_amount));
+  }
+}
+
+// ==========================================
+// WITHDRAWAL REQUEST MANAGEMENT
+// ==========================================
+
+export async function createWithdrawalFirestore(params: {
+  userId: number;
+  userName: string;
+  username: string;
+  walletAddress: string;
+  referCode: string;
+  amount: number;
+  feePercent: number;
+}): Promise<{ withdrawal: WithdrawalRequest; newBalance: number }> {
+  const { userId, userName, username, walletAddress, referCode, amount, feePercent } = params;
+
+  // Validation
+  const cleanAddr = walletAddress.trim();
+  if (!cleanAddr.startsWith('0x') || cleanAddr.length !== 42) {
+    throw new Error('Please enter a valid 42-character BEP20 wallet address (starting with 0x).');
+  }
+
+  const cleanCode = referCode.trim();
+  if (!cleanCode || cleanCode.length !== 6) {
+    throw new Error('Please enter a valid 6-digit Elite Force refer code.');
+  }
+
+  if (isNaN(amount) || amount <= 0) {
+    throw new Error('Please enter a valid withdrawal amount.');
+  }
+
+  // Check user balance in Firestore
+  const userRef = doc(db, 'users', String(userId));
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) {
+    throw new Error('User profile not found.');
+  }
+
+  const userData = userSnap.data();
+  const currentBalance = Number(userData.balance || 0);
+
+  if (currentBalance < amount) {
+    throw new Error(`Insufficient balance! Your current balance is ${currentBalance.toFixed(4)} E-FORCE.`);
+  }
+
+  // Check minimum withdrawal
+  const settings = await getAppSettings();
+  const minAmount = settings.min_withdraw_amount || 50;
+  if (amount < minAmount) {
+    throw new Error(`Minimum withdrawal amount is ${minAmount} E-FORCE.`);
+  }
+
+  // Calculate Fee & Net Amount
+  const feeRate = feePercent !== undefined ? feePercent : (settings.withdraw_fee_percent || 5);
+  const feeAmount = Number(((amount * feeRate) / 100).toFixed(4));
+  const netAmount = Number((amount - feeAmount).toFixed(4));
+
+  const docId = `wd_${Date.now()}_${userId}`;
+  const now = new Date().toISOString();
+
+  const withdrawal: WithdrawalRequest = {
+    id: docId,
+    user_id: userId,
+    user_name: userName || 'Miner',
+    username: username || '',
+    wallet_address: cleanAddr,
+    refer_code: cleanCode,
+    amount: Number(amount),
+    fee_percent: Number(feeRate),
+    fee_amount: feeAmount,
+    net_amount: netAmount,
+    status: 'pending',
+    created_at: now,
+    updated_at: now
+  };
+
+  // 1. Deduct balance from user
+  const newBalance = Number((currentBalance - amount).toFixed(4));
+  await setDoc(userRef, { balance: newBalance, updated_at: now }, { merge: true });
+
+  // 2. Save withdrawal record
+  await setDoc(doc(db, 'withdrawals', docId), withdrawal);
+
+  return { withdrawal, newBalance };
+}
+
+export async function getUserWithdrawalsFirestore(userId: number): Promise<WithdrawalRequest[]> {
+  try {
+    const q = query(collection(db, 'withdrawals'), where('user_id', '==', Number(userId)));
+    const snap = await getDocs(q);
+    const list: WithdrawalRequest[] = [];
+    snap.forEach(d => {
+      list.push(d.data() as WithdrawalRequest);
+    });
+    // Sort client-side by created_at desc
+    return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  } catch (e) {
+    console.warn('Error fetching user withdrawals:', e);
+    return [];
+  }
+}
+
+export async function getAllWithdrawalsFirestore(): Promise<WithdrawalRequest[]> {
+  try {
+    const snap = await getDocs(collection(db, 'withdrawals'));
+    const list: WithdrawalRequest[] = [];
+    snap.forEach(d => {
+      list.push(d.data() as WithdrawalRequest);
+    });
+    // Sort client-side by created_at desc
+    return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  } catch (e) {
+    console.warn('Error fetching all withdrawals for admin:', e);
+    return [];
+  }
+}
+
+export async function adminUpdateWithdrawalStatusFirestore(
+  withdrawalId: string,
+  newStatus: 'completed' | 'rejected',
+  adminNote?: string
+): Promise<void> {
+  const wdRef = doc(db, 'withdrawals', withdrawalId);
+  const wdSnap = await getDoc(wdRef);
+  if (!wdSnap.exists()) {
+    throw new Error('Withdrawal record not found.');
+  }
+
+  const wd = wdSnap.data() as WithdrawalRequest;
+  const now = new Date().toISOString();
+
+  // If rejecting a previously pending withdrawal, refund user's balance!
+  if (wd.status === 'pending' && newStatus === 'rejected') {
+    const userRef = doc(db, 'users', String(wd.user_id));
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      const uData = userSnap.data();
+      const refundedBalance = Number(((uData.balance || 0) + wd.amount).toFixed(4));
+      await setDoc(userRef, { balance: refundedBalance, updated_at: now }, { merge: true });
+    }
+  }
+
+  await setDoc(
+    wdRef,
+    {
+      status: newStatus,
+      admin_note: adminNote || '',
+      updated_at: now
+    },
+    { merge: true }
+  );
 }
 

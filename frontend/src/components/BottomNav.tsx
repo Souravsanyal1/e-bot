@@ -1,9 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Pickaxe, CheckSquare, Users, Trophy } from 'lucide-react';
+import { Pickaxe, CheckSquare, Wallet, Users, Trophy } from 'lucide-react';
 import { tg } from '../services/telegram';
+import type { TabType } from '../types';
 
-export type TabType = 'mining' | 'tasks' | 'friends' | 'leaderboard';
+export type { TabType };
 
 interface BottomNavProps {
   currentTab: TabType | 'admin';
@@ -14,6 +15,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
   const tabs = [
     { id: 'mining' as TabType, label: 'Mining', icon: Pickaxe },
     { id: 'tasks' as TabType, label: 'Tasks', icon: CheckSquare },
+    { id: 'withdraw' as TabType, label: 'Withdraw', icon: Wallet },
     { id: 'friends' as TabType, label: 'Friends', icon: Users },
     { id: 'leaderboard' as TabType, label: 'Rank', icon: Trophy },
   ];

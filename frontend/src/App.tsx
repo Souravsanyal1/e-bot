@@ -5,6 +5,7 @@ import { BottomNav } from './components/BottomNav';
 import type { TabType } from './components/BottomNav';
 import { MiningTab } from './components/MiningTab';
 import { TasksTab } from './components/TasksTab';
+import { WithdrawTab } from './components/WithdrawTab';
 import { FriendsTab } from './components/FriendsTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
 import { AdminTab } from './components/AdminTab';
@@ -266,6 +267,23 @@ export const App: React.FC = () => {
                 specialTasks={specialTasks}
                 onCompleteTask={handleCompleteTask}
                 onRefresh={loadTabContent}
+              />
+            </motion.div>
+          )}
+
+          {currentTab === 'withdraw' && (
+            <motion.div
+              key="withdraw"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <WithdrawTab
+                user={user}
+                onBalanceUpdate={(newBalance) => {
+                  setUser(prev => prev ? { ...prev, balance: newBalance } : null);
+                }}
               />
             </motion.div>
           )}

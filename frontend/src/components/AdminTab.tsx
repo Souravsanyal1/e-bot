@@ -4,7 +4,7 @@ import {
   Coins, CheckSquare, Zap, Search, RefreshCw, 
   ArrowLeft, CheckCircle2, AlertTriangle, Radio, 
   ExternalLink, Ban, Sparkles, MessageSquare,
-  Sliders
+  Sliders, Wallet, Copy, Check, XCircle, Clock
 } from 'lucide-react';
 import { 
   getAdminStatsFirestore, 
@@ -16,9 +16,11 @@ import {
   adminBoostUserFirestore, 
   adminBroadcastFirestore,
   getAppSettings,
-  updateAppSettings
+  updateAppSettings,
+  getAllWithdrawalsFirestore,
+  adminUpdateWithdrawalStatusFirestore
 } from '../services/firestore';
-import type { AdminStats, Task } from '../types';
+import type { AdminStats, Task, WithdrawalRequest } from '../types';
 
 interface AdminTabProps {
   adminEmail?: string;
@@ -26,7 +28,7 @@ interface AdminTabProps {
   onSignOut?: () => void;
 }
 
-type AdminSection = 'overview' | 'users' | 'tasks' | 'broadcast';
+type AdminSection = 'overview' | 'withdrawals' | 'users' | 'tasks' | 'broadcast';
 
 export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOut }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
@@ -39,6 +41,19 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
   });
   const [tasks, setTasks] = useState<Task[]>([]);
   const [userList, setUserList] = useState<any[]>([]);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
+  const [withdrawFilter, setWithdrawFilter] = useState<'all' | 'pending' | 'completed' | 'rejected'>('all');
+  const [withdrawSearch, setWithdrawSearch] = useState('');
+  const [copiedWdAddressId, setCopiedWdAddressId] = useState<string | null>(null);
+  const [processingWdId, setProcessingWdId] = useState<string | null>(null);
+
+  // Withdrawal Config Settings
+  const [withdrawFeePercent, setWithdrawFeePercent] = useState<number>(5);
+  const [minWithdrawAmount, setMinWithdrawAmount] = useState<number>(50);
+  const [withdrawEnabled, setWithdrawEnabled] = useState<boolean>(true);
+  const [savingWithdrawConfig, setSavingWithdrawConfig] = useState(false);
+  const [withdrawConfigSaved, setWithdrawConfigSaved] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -71,18 +86,23 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
   const loadData = async () => {
     setLoading(true);
     try {
-      const [statsData, tasksData, usersData, appSettings] = await Promise.all([
+      const [statsData, tasksData, usersData, appSettings, withdrawalsData] = await Promise.all([
         getAdminStatsFirestore(),
         getTasksFirestore(0),
         getAdminUsersFirestore(searchQuery),
-        getAppSettings()
+        getAppSettings(),
+        getAllWithdrawalsFirestore().catch(() => [])
       ]);
 
       setStats(statsData);
       setTasks([...tasksData.standard, ...tasksData.special]);
       setUserList(usersData);
+      setWithdrawals(withdrawalsData);
       setMonetagZoneId(appSettings.monetag_zone_id || '11941636');
       setMonetagEnabled(appSettings.monetag_enabled !== false);
+      setWithdrawFeePercent(appSettings.withdraw_fee_percent !== undefined ? appSettings.withdraw_fee_percent : 5);
+      setMinWithdrawAmount(appSettings.min_withdraw_amount !== undefined ? appSettings.min_withdraw_amount : 50);
+      setWithdrawEnabled(appSettings.withdraw_enabled !== false);
     } catch (err: any) {
       console.warn('Admin load error:', err);
     } finally {
@@ -105,6 +125,72 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  const handleSaveWithdrawConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingWithdrawConfig(true);
+    try {
+      await updateAppSettings({
+        withdraw_fee_percent: Number(withdrawFeePercent),
+        min_withdraw_amount: Number(minWithdrawAmount),
+        withdraw_enabled: withdrawEnabled
+      });
+      setWithdrawConfigSaved(true);
+      setTimeout(() => setWithdrawConfigSaved(false), 3000);
+    } catch (err: any) {
+      alert('Error saving withdrawal settings: ' + err.message);
+    } finally {
+      setSavingWithdrawConfig(false);
+    }
+  };
+
+  const handleApproveWithdrawal = async (wd: WithdrawalRequest) => {
+    if (!confirm(`Confirm payout of ${wd.net_amount.toFixed(2)} E-FORCE to BEP20 address ${wd.wallet_address}?`)) {
+      return;
+    }
+    setProcessingWdId(wd.id);
+    try {
+      await adminUpdateWithdrawalStatusFirestore(wd.id, 'completed');
+      const updated = await getAllWithdrawalsFirestore();
+      setWithdrawals(updated);
+    } catch (err: any) {
+      alert('Failed to approve withdrawal: ' + err.message);
+    } finally {
+      setProcessingWdId(null);
+    }
+  };
+
+  const handleRejectWithdrawal = async (wd: WithdrawalRequest) => {
+    const reason = prompt(
+      `Reject withdrawal #${wd.id}?\n\nThis will automatically REFUND ${wd.amount} E-FORCE back to ${wd.user_name}'s balance.\nEnter reason (optional):`,
+      'Invalid BEP20 address or unverified user'
+    );
+    if (reason === null) return;
+
+    setProcessingWdId(wd.id);
+    try {
+      await adminUpdateWithdrawalStatusFirestore(wd.id, 'rejected', reason);
+      const [updatedWd, updatedUsers] = await Promise.all([
+        getAllWithdrawalsFirestore(),
+        getAdminUsersFirestore(searchQuery)
+      ]);
+      setWithdrawals(updatedWd);
+      setUserList(updatedUsers);
+      alert(`Withdrawal rejected. ${wd.amount} E-FORCE has been refunded to ${wd.user_name}.`);
+    } catch (err: any) {
+      alert('Failed to reject withdrawal: ' + err.message);
+    } finally {
+      setProcessingWdId(null);
+    }
+  };
+
+  const copyWdAddress = (text: string, id: string) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+    }
+    setCopiedWdAddressId(id);
+    setTimeout(() => setCopiedWdAddressId(null), 2000);
   };
 
   useEffect(() => {
@@ -289,6 +375,11 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
         <div className="flex items-center gap-2 mb-6 border-b border-white/10 pb-3 overflow-x-auto">
           {[
             { id: 'overview', label: 'Dashboard Overview', icon: Zap },
+            { 
+              id: 'withdrawals', 
+              label: `Withdrawals (${withdrawals.filter(w => w.status === 'pending').length > 0 ? `${withdrawals.filter(w => w.status === 'pending').length} Pending` : withdrawals.length})`, 
+              icon: Wallet 
+            },
             { id: 'users', label: `Users (${stats.totalUsers})`, icon: Users },
             { id: 'tasks', label: `Task Manager (${tasks.length})`, icon: CheckSquare },
             { id: 'broadcast', label: 'Telegram Broadcast', icon: Send }
@@ -315,8 +406,8 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
         {/* SECTION 1: OVERVIEW & KEY METRICS */}
         {activeSection === 'overview' && (
           <div className="space-y-6">
-            {/* 4 Big KPI Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* 5 Big KPI Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="glass-panel p-5 rounded-2xl border border-white/10 hover:border-orange-500/30 transition-all">
                 <div className="flex items-center justify-between text-gray-400 mb-2">
                   <span className="text-xs font-bold uppercase tracking-wider">Total Miners</span>
@@ -324,7 +415,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     <Users size={18} />
                   </div>
                 </div>
-                <div className="text-3xl font-black font-mono text-white">
+                <div className="text-2xl font-black font-mono text-white">
                   {stats.totalUsers.toLocaleString()}
                 </div>
                 <div className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
@@ -340,10 +431,30 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     <Coins size={18} />
                   </div>
                 </div>
-                <div className="text-3xl font-black font-mono text-brand-orange fire-text-gradient">
-                  {stats.totalMinedTokens.toFixed(4)}
+                <div className="text-2xl font-black font-mono text-brand-orange fire-text-gradient">
+                  {stats.totalMinedTokens.toFixed(2)}
                 </div>
                 <div className="text-[11px] text-orange-200/70 mt-1">E-FORCE Distributed in Network</div>
+              </div>
+
+              {/* Withdrawals KPI Card */}
+              <div 
+                onClick={() => setActiveSection('withdrawals')}
+                className="glass-panel p-5 rounded-2xl border border-amber-500/30 hover:border-amber-500 cursor-pointer transition-all bg-gradient-to-b from-amber-500/10 to-transparent"
+              >
+                <div className="flex items-center justify-between text-amber-300 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider">Pending Withdrawals</span>
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+                    <Wallet size={18} />
+                  </div>
+                </div>
+                <div className="text-2xl font-black font-mono text-amber-400">
+                  {withdrawals.filter(w => w.status === 'pending').length}
+                </div>
+                <div className="text-[11px] text-gray-300 mt-1 flex items-center justify-between">
+                  <span>Queued: <strong>{withdrawals.filter(w => w.status === 'pending').reduce((s, w) => s + w.net_amount, 0).toFixed(2)}</strong></span>
+                  <span className="text-brand-orange underline text-[10px]">Review →</span>
+                </div>
               </div>
 
               <div className="glass-panel p-5 rounded-2xl border border-white/10 hover:border-orange-500/30 transition-all">
@@ -353,7 +464,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     <CheckSquare size={18} />
                   </div>
                 </div>
-                <div className="text-3xl font-black font-mono text-white">
+                <div className="text-2xl font-black font-mono text-white">
                   {stats.activeTasks}
                 </div>
                 <div className="text-[11px] text-gray-400 mt-1">{stats.completedTasks} completions logged</div>
@@ -366,7 +477,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     <Sparkles size={18} />
                   </div>
                 </div>
-                <div className="text-3xl font-black font-mono text-white">
+                <div className="text-2xl font-black font-mono text-white">
                   {stats.totalReferrals}
                 </div>
                 <div className="text-[11px] text-gray-400 mt-1">Direct user peer invites</div>
@@ -524,10 +635,370 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                 </div>
               </form>
             </div>
+
+            {/* Withdrawal System Settings Panel in Overview */}
+            <div className="glass-panel p-6 rounded-2xl border border-white/10">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Wallet size={18} className="text-brand-orange" />
+                    BEP20 Withdrawal Protocol Settings
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Control user withdrawal fees, minimum token limits, and global payout status.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 ${
+                    withdrawEnabled
+                      ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-red-500/10 text-red-300 border border-red-500/30'
+                  }`}>
+                    <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+                    {withdrawEnabled ? 'Withdrawals Active' : 'Withdrawals Paused'}
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveWithdrawConfig} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs text-gray-300 font-semibold block mb-1">
+                      Admin Withdrawal Fee Percentage (%)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={withdrawFeePercent}
+                        onChange={(e) => setWithdrawFeePercent(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-brand-orange pr-8"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-orange">%</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Deducted automatically from requested user payout amount.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-gray-300 font-semibold block mb-1">
+                      Minimum Withdrawal Limit (E-FORCE)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={minWithdrawAmount}
+                        onChange={(e) => setMinWithdrawAmount(parseFloat(e.target.value) || 1)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-brand-orange pr-16"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-orange">E-FORCE</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Miners must hold at least this amount to initiate a withdrawal.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col justify-center">
+                    <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all">
+                      <input
+                        type="checkbox"
+                        checked={withdrawEnabled}
+                        onChange={(e) => setWithdrawEnabled(e.target.checked)}
+                        className="w-4 h-4 rounded border-white/20 accent-orange-500"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-white block">Enable User Withdrawals</span>
+                        <span className="text-[11px] text-gray-400 block">
+                          Uncheck to temporarily pause new withdrawal submissions.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={savingWithdrawConfig}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-orange to-orange-500 text-white font-extrabold text-xs shadow-orange-glow hover:brightness-110 transition-all flex items-center gap-1.5"
+                  >
+                    {savingWithdrawConfig ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={15} />
+                    )}
+                    <span>Save Withdrawal Protocol Settings</span>
+                  </button>
+
+                  {withdrawConfigSaved && (
+                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 size={14} /> Saved & Applied Live!
+                    </span>
+                  )}
+                </div>
+              </form>
+            </div>
           </div>
         )}
 
-        {/* SECTION 2: USERS MANAGEMENT TABLE */}
+        {/* SECTION 2: WITHDRAWAL REQUESTS MANAGEMENT */}
+        {activeSection === 'withdrawals' && (
+          <div className="glass-panel rounded-2xl border border-white/10 p-6 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/10">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Wallet size={20} className="text-brand-orange" />
+                  BEP20 Withdrawal Requests Queue ({withdrawals.length})
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Process miner payouts directly to BNB Smart Chain addresses. Rejecting automatically refunds the tokens.
+                </p>
+              </div>
+
+              {/* Quick Summary Badges */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5">
+                  <Clock size={13} />
+                  <span>Pending: {withdrawals.filter(w => w.status === 'pending').length} ({withdrawals.filter(w => w.status === 'pending').reduce((s, w) => s + w.net_amount, 0).toFixed(2)} E-FORCE)</span>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5">
+                  <CheckCircle2 size={13} />
+                  <span>Paid: {withdrawals.filter(w => w.status === 'completed').reduce((s, w) => s + w.net_amount, 0).toFixed(2)} E-FORCE</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+                {[
+                  { id: 'all', label: `All (${withdrawals.length})` },
+                  { id: 'pending', label: `Pending (${withdrawals.filter(w => w.status === 'pending').length})` },
+                  { id: 'completed', label: `Paid (${withdrawals.filter(w => w.status === 'completed').length})` },
+                  { id: 'rejected', label: `Rejected (${withdrawals.filter(w => w.status === 'rejected').length})` }
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setWithdrawFilter(f.id as any)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                      withdrawFilter === f.id
+                        ? 'bg-brand-orange text-black font-extrabold shadow-orange-glow'
+                        : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/5'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full sm:w-72">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search wallet, code, ID or name..."
+                  value={withdrawSearch}
+                  onChange={(e) => setWithdrawSearch(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-brand-orange"
+                />
+              </div>
+            </div>
+
+            {/* Withdrawals List Table */}
+            {(() => {
+              const filtered = withdrawals
+                .filter(w => {
+                  if (withdrawFilter === 'all') return true;
+                  return w.status === withdrawFilter;
+                })
+                .filter(w => {
+                  if (!withdrawSearch.trim()) return true;
+                  const q = withdrawSearch.toLowerCase();
+                  return (
+                    w.wallet_address.toLowerCase().includes(q) ||
+                    w.refer_code.toLowerCase().includes(q) ||
+                    String(w.user_id).includes(q) ||
+                    w.user_name.toLowerCase().includes(q) ||
+                    (w.username && w.username.toLowerCase().includes(q))
+                  );
+                });
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="py-12 text-center text-gray-500 space-y-2 rounded-xl bg-white/[0.02] border border-white/5">
+                    <Wallet size={36} className="mx-auto opacity-30" />
+                    <p className="text-sm font-semibold">No withdrawal requests found</p>
+                    <p className="text-xs text-gray-600">Matching the selected filter or search query</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="overflow-x-auto rounded-xl border border-white/5">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/5 text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
+                        <th className="py-3 px-4">Miner</th>
+                        <th className="py-3 px-4">BEP20 Wallet Address</th>
+                        <th className="py-3 px-4 text-center">Refer Code (6D)</th>
+                        <th className="py-3 px-4 text-right">Requested</th>
+                        <th className="py-3 px-4 text-right">Fee ({withdrawFeePercent}%)</th>
+                        <th className="py-3 px-4 text-right">Net Payout</th>
+                        <th className="py-3 px-4 text-center">Status</th>
+                        <th className="py-3 px-4 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-xs">
+                      {filtered.map(wd => {
+                        const isPending = wd.status === 'pending';
+                        const isCompleted = wd.status === 'completed';
+                        const isRejected = wd.status === 'rejected';
+                        const isProcessing = processingWdId === wd.id;
+
+                        return (
+                          <tr key={wd.id} className="hover:bg-white/[0.02] transition-colors">
+                            {/* Miner Info */}
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-white flex items-center gap-1.5">
+                                <span>{wd.user_name}</span>
+                                {wd.username && (
+                                  <span className="text-[10px] text-gray-400 font-normal">@{wd.username}</span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-gray-500 font-mono">
+                                ID: {wd.user_id} • {new Date(wd.created_at).toLocaleDateString()} {new Date(wd.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </td>
+
+                            {/* Wallet Address */}
+                            <td className="py-3 px-4 font-mono">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 text-[11px]">
+                                  {wd.wallet_address.slice(0, 8)}...{wd.wallet_address.slice(-6)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyWdAddress(wd.wallet_address, wd.id)}
+                                  className="p-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+                                  title="Copy Full Address"
+                                >
+                                  {copiedWdAddressId === wd.id ? (
+                                    <Check size={12} className="text-emerald-400" />
+                                  ) : (
+                                    <Copy size={12} />
+                                  )}
+                                </button>
+                                <a
+                                  href={`https://bscscan.com/address/${wd.wallet_address}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="p-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 hover:text-brand-orange transition-all"
+                                  title="View on BscScan"
+                                >
+                                  <ExternalLink size={12} />
+                                </a>
+                              </div>
+                              <div className="text-[9px] text-gray-500 mt-0.5 truncate max-w-[200px]" title={wd.wallet_address}>
+                                {wd.wallet_address}
+                              </div>
+                            </td>
+
+                            {/* 6-Digit Refer Code */}
+                            <td className="py-3 px-4 text-center">
+                              <span className="font-mono text-xs font-black tracking-widest text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                                {wd.refer_code}
+                              </span>
+                            </td>
+
+                            {/* Gross Amount */}
+                            <td className="py-3 px-4 text-right font-mono font-bold text-gray-300">
+                              {wd.amount.toFixed(2)}
+                            </td>
+
+                            {/* Fee */}
+                            <td className="py-3 px-4 text-right font-mono text-amber-400 text-[11px]">
+                              -{wd.fee_amount.toFixed(2)} ({wd.fee_percent}%)
+                            </td>
+
+                            {/* Net Payout */}
+                            <td className="py-3 px-4 text-right font-mono font-black text-emerald-400 text-sm">
+                              {wd.net_amount.toFixed(2)}
+                              <span className="text-[10px] text-gray-400 font-normal ml-1">E-FORCE</span>
+                            </td>
+
+                            {/* Status */}
+                            <td className="py-3 px-4 text-center">
+                              {isPending && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                  <Clock size={10} /> Pending
+                                </span>
+                              )}
+                              {isCompleted && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  <CheckCircle2 size={10} /> Paid
+                                </span>
+                              )}
+                              {isRejected && (
+                                <div>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">
+                                    <XCircle size={10} /> Rejected
+                                  </span>
+                                  {wd.admin_note && (
+                                    <div className="text-[9px] text-gray-400 mt-0.5 max-w-[120px] truncate" title={wd.admin_note}>
+                                      {wd.admin_note}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-3 px-4 text-center">
+                              {isPending ? (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={isProcessing}
+                                    onClick={() => handleApproveWithdrawal(wd)}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50"
+                                    title="Mark as Paid / Completed"
+                                  >
+                                    <Check size={12} />
+                                    <span>Pay</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isProcessing}
+                                    onClick={() => handleRejectWithdrawal(wd)}
+                                    className="px-2.5 py-1 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50"
+                                    title="Reject and Refund E-FORCE to user"
+                                  >
+                                    <XCircle size={12} />
+                                    <span>Refund</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-gray-500 font-mono">
+                                  {isCompleted ? 'Completed ✓' : 'Refunded'}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* SECTION 3: USERS MANAGEMENT TABLE */}
         {activeSection === 'users' && (
           <div className="glass-panel rounded-2xl border border-white/10 p-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
