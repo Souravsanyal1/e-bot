@@ -61,9 +61,9 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
   const [broadcastProgress, setBroadcastProgress] = useState<{ sent: number; total: number } | null>(null);
   const [broadcastResult, setBroadcastResult] = useState<string | null>(null);
 
-  // App Settings / Adsgram state
-  const [adsgramBlockId, setAdsgramBlockId] = useState('');
-  const [adsgramEnabled, setAdsgramEnabled] = useState(false);
+  // App Settings / Gigapub state
+  const [gigapubAppId, setGigapubAppId] = useState('8451');
+  const [gigapubEnabled, setGigapubEnabled] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
@@ -81,8 +81,8 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
       setStats(statsData);
       setTasks([...tasksData.standard, ...tasksData.special]);
       setUserList(usersData);
-      setAdsgramBlockId(appSettings.adsgram_block_id || '');
-      setAdsgramEnabled(Boolean(appSettings.adsgram_enabled));
+      setGigapubAppId(appSettings.gigapub_app_id || '8451');
+      setGigapubEnabled(appSettings.gigapub_enabled !== false);
     } catch (err: any) {
       console.warn('Admin load error:', err);
     } finally {
@@ -95,8 +95,8 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
     setSavingSettings(true);
     try {
       await updateAppSettings({
-        adsgram_block_id: adsgramBlockId.trim(),
-        adsgram_enabled: adsgramEnabled
+        gigapub_app_id: gigapubAppId.trim() || '8451',
+        gigapub_enabled: gigapubEnabled
       });
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 3000);
@@ -399,9 +399,9 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-white/5">
                     <span className="text-gray-400">Ad Monetization Engine:</span>
-                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-orange-500/10 text-orange-300">
-                      {adsgramEnabled && adsgramBlockId && adsgramBlockId !== '51502'
-                        ? `Adsgram Network (#${adsgramBlockId})`
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-green-500/10 text-green-300">
+                      {gigapubEnabled 
+                        ? `Gigapub Ads Network (App ID: ${gigapubAppId || '8451'})` 
                         : 'Native In-App 3D Video (Safe & 100% Active)'}
                     </span>
                   </div>
@@ -440,27 +440,27 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
               </div>
             </div>
 
-            {/* Ad Monetization & Adsgram Configuration Panel */}
+            {/* Ad Monetization & Gigapub Configuration Panel */}
             <div className="glass-panel p-6 rounded-2xl border border-white/10 mt-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <Sliders size={18} className="text-brand-orange" />
-                    Adsgram & Video Ad Configuration
+                    Gigapub Ad Network Configuration
                   </h3>
                   <p className="text-xs text-gray-400 mt-1">
-                    Control how sponsored video missions behave across the Telegram Mini App.
+                    Powered by Gigapub (ad.gigapub.tech) for Telegram Mini App rewarded monetization.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 ${
-                    adsgramEnabled && adsgramBlockId && adsgramBlockId !== '51502'
-                      ? 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/30'
-                      : 'bg-green-500/10 text-green-300 border border-green-500/30'
+                    gigapubEnabled
+                      ? 'bg-green-500/10 text-green-300 border border-green-500/30'
+                      : 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/30'
                   }`}>
                     <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
-                    {adsgramEnabled && adsgramBlockId && adsgramBlockId !== '51502'
-                      ? `Adsgram Live (#${adsgramBlockId})`
+                    {gigapubEnabled
+                      ? `Gigapub Live (App ID: ${gigapubAppId || '8451'})`
                       : 'Native Katana Video Ad Player (Active)'}
                   </span>
                 </div>
@@ -470,17 +470,17 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-gray-300 font-semibold block mb-1">
-                      Adsgram Rewarded Block ID (from partner.adsgram.ai)
+                      Gigapub Application ID (from ad.gigapub.tech)
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. 12345 (Leave empty or inactive to use Native Video)"
-                      value={adsgramBlockId}
-                      onChange={(e) => setAdsgramBlockId(e.target.value)}
+                      placeholder="e.g. 8451"
+                      value={gigapubAppId}
+                      onChange={(e) => setGigapubAppId(e.target.value)}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-orange font-mono"
                     />
                     <p className="text-[11px] text-gray-500 mt-1">
-                      Note: Block 51502 was inactive. Do not enable unless your block is approved on Adsgram.
+                      Script: <code className="text-orange-400">https://ad.gigapub.tech/script?id={gigapubAppId || '8451'}</code>
                     </p>
                   </div>
 
@@ -488,14 +488,14 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all">
                       <input
                         type="checkbox"
-                        checked={adsgramEnabled}
-                        onChange={(e) => setAdsgramEnabled(e.target.checked)}
+                        checked={gigapubEnabled}
+                        onChange={(e) => setGigapubEnabled(e.target.checked)}
                         className="w-4 h-4 rounded border-white/20 accent-orange-500"
                       />
                       <div>
-                        <span className="text-xs font-bold text-white block">Enable External Adsgram Network Ads</span>
+                        <span className="text-xs font-bold text-white block">Enable Gigapub Network Ads (window.showGiga)</span>
                         <span className="text-[11px] text-gray-400 block">
-                          When OFF, the app smoothly uses the native shining Katana video player with zero errors.
+                          When checked, user clicks call Gigapub directly. If blocked or unavailable, falls back to native 3D Katana player.
                         </span>
                       </div>
                     </label>
@@ -513,7 +513,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     ) : (
                       <CheckCircle2 size={15} />
                     )}
-                    <span>Save Ad Configuration</span>
+                    <span>Save Gigapub Configuration</span>
                   </button>
 
                   {settingsSaved && (
@@ -646,7 +646,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
               <div>
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
                   <CheckSquare size={20} className="text-brand-orange" />
-                  Task & Adsgram Mission Manager ({tasks.length})
+                  Task & Rewarded Mission Manager ({tasks.length})
                 </h2>
                 <p className="text-xs text-gray-400">Manage missions that reward users with E-FORCE tokens and permanent speed boosts.</p>
               </div>
@@ -735,7 +735,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     >
                       <option value="link">Web Link / Social</option>
                       <option value="telegram">Telegram Channel</option>
-                      <option value="ad">Adsgram Rewarded Video Ad</option>
+                      <option value="ad">Gigapub Rewarded Video Ad</option>
                     </select>
                   </div>
                 </div>
@@ -748,7 +748,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                       onChange={(e) => setTaskAdRequired(e.target.checked)}
                       className="rounded border-white/20 accent-orange-500"
                     />
-                    <span>Requires Rewarded Adsgram Ad Video view</span>
+                    <span>Requires Rewarded Gigapub Ad Video view</span>
                   </label>
                 </div>
 

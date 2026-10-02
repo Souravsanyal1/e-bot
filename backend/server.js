@@ -198,7 +198,7 @@ async function startServer() {
         base_rate: config.BASE_MINING_RATE,
         session_duration_hours: config.SESSION_DURATION_HOURS,
         referral_speed_boost: config.REFERRAL_SPEED_BOOST,
-        adsgram_block_id: config.ADSGRAM_BLOCK_ID
+        gigapub_app_id: config.GIGAPUB_APP_ID
       }
     };
   });

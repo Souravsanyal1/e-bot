@@ -639,27 +639,31 @@ export async function adminBroadcastFirestore(
 }
 
 export interface AppSettings {
-  adsgram_block_id?: string;
-  adsgram_enabled?: boolean;
+  gigapub_app_id?: string;
+  gigapub_enabled?: boolean;
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
   try {
     const snap = await getDoc(doc(db, 'settings', 'config'));
     if (snap.exists()) {
-      return snap.data() as AppSettings;
+      const data = snap.data();
+      return {
+        gigapub_app_id: data.gigapub_app_id || '8451',
+        gigapub_enabled: data.gigapub_enabled !== false
+      };
     }
   } catch (e) {
     console.warn('Failed to load app settings from firestore:', e);
   }
 
-  // Fallback to localStorage or safe defaults
-  const localBlockId = localStorage.getItem('eforce_adsgram_block_id') || '';
-  const localEnabled = localStorage.getItem('eforce_adsgram_enabled') === 'true';
+  // Fallback to localStorage or defaults
+  const localAppId = localStorage.getItem('eforce_gigapub_app_id') || '8451';
+  const localEnabled = localStorage.getItem('eforce_gigapub_enabled') !== 'false';
 
   return {
-    adsgram_block_id: localBlockId,
-    adsgram_enabled: localEnabled
+    gigapub_app_id: localAppId,
+    gigapub_enabled: localEnabled
   };
 }
 
@@ -671,11 +675,11 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
     console.warn('Failed to save settings to firestore:', e);
   }
 
-  if (settings.adsgram_block_id !== undefined) {
-    localStorage.setItem('eforce_adsgram_block_id', settings.adsgram_block_id);
+  if (settings.gigapub_app_id !== undefined) {
+    localStorage.setItem('eforce_gigapub_app_id', settings.gigapub_app_id);
   }
-  if (settings.adsgram_enabled !== undefined) {
-    localStorage.setItem('eforce_adsgram_enabled', String(settings.adsgram_enabled));
+  if (settings.gigapub_enabled !== undefined) {
+    localStorage.setItem('eforce_gigapub_enabled', String(settings.gigapub_enabled));
   }
 }
 

@@ -21,8 +21,7 @@ export const config = {
   MINI_APP_URL: process.env.MINI_APP_URL || 'https://e-force-bot.web.app',
   BOT_USERNAME: process.env.BOT_USERNAME || 'Elite_Force_Official_Mining_bot',
   CHANNEL_URL: process.env.CHANNEL_URL || '',
-  COMMUNITY_URL: process.env.COMMUNITY_URL || '',
-  ADSGRAM_BLOCK_ID: process.env.ADSGRAM_BLOCK_ID || 'int-9999',
+  GIGAPUB_APP_ID: process.env.GIGAPUB_APP_ID || '8451',
   
   // Mining Defaults
   BASE_MINING_RATE: parseFloat(process.env.BASE_MINING_RATE || '0.5'), // E-FORCE per hour

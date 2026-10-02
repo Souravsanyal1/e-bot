@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Zap, PlayCircle, ExternalLink, Flame, ArrowUpRight } from 'lucide-react';
 import type { Task } from '../types';
@@ -8,11 +8,7 @@ import { getAppSettings } from '../services/firestore';
 
 declare global {
   interface Window {
-    Adsgram?: {
-      init: (params: { blockId: string; debug?: boolean }) => {
-        show: () => Promise<{ done: boolean; description: string; state: string }>;
-      };
-    };
+    showGiga?: () => Promise<void>;
   }
 }
 
@@ -33,69 +29,30 @@ export const TasksTab: React.FC<TasksTabProps> = ({
   const [isAdOpen, setIsAdOpen] = useState<boolean>(false);
   const [loadingTaskId, setLoadingTaskId] = useState<number | null>(null);
 
-  // Auto purge any lingering Adsgram SDK error alerts that block the screen
-  const purgeAdsgramErrors = () => {
-    try {
-      const allDivs = document.querySelectorAll('div, [class*="adsgram"], [id*="adsgram"]');
-      allDivs.forEach((el) => {
-        const text = el.textContent || '';
-        if (
-          text.includes('AdsgramError') ||
-          text.includes('partner.adsgram.ai') ||
-          text.includes('Block is not active') ||
-          text.includes('not active')
-        ) {
-          el.remove();
-        }
-      });
-    } catch {
-      // ignore
-    }
-  };
-
-  useEffect(() => {
-    purgeAdsgramErrors();
-    const timer = setInterval(purgeAdsgramErrors, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const handleTaskClick = async (task: Task) => {
     if (task.is_completed) return;
 
     tg.haptic.impact('medium');
 
-    // If task requires watching an Ad
+    // If task requires watching an Ad (Gigapub Integration App ID: 8451)
     if (task.ad_required) {
       setLoadingTaskId(task.id);
       try {
         const appSettings = await getAppSettings();
-        // Only trigger external Adsgram SDK if explicitly enabled by admin AND a custom active block ID is configured (not 51502)
-        if (
-          appSettings.adsgram_enabled &&
-          appSettings.adsgram_block_id &&
-          appSettings.adsgram_block_id !== '51502' &&
-          window.Adsgram
-        ) {
-          try {
-            const AdController = window.Adsgram.init({ blockId: appSettings.adsgram_block_id });
-            const result = await AdController.show();
-            if (result && result.done) {
-              await handleAdFinished(task);
-              return;
-            }
-          } catch (adError) {
-            console.warn("Adsgram ad error, falling back to native player:", adError);
-            purgeAdsgramErrors();
-          }
+        if (appSettings.gigapub_enabled !== false && typeof window.showGiga === 'function') {
+          // Trigger official Gigapub ad modal
+          await window.showGiga();
+          // Gigapub ad completed successfully -> claim reward directly
+          await handleAdFinished(task);
+          return;
         }
-      } catch (err) {
-        console.warn("Settings check error:", err);
+      } catch (gigaErr) {
+        console.warn("Gigapub ad skipped or errored, falling back to in-app player:", gigaErr);
       } finally {
         setLoadingTaskId(null);
       }
 
-      // Native Cyber Sponsored Video Player (Always smooth, zero Adsgram error popups)
-      purgeAdsgramErrors();
+      // Fallback native Katana in-app player modal if ad blocked
       setSelectedAdTask(task);
       setIsAdOpen(true);
       return;
