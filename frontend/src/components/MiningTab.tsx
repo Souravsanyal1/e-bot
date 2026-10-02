@@ -184,17 +184,30 @@ export const MiningTab: React.FC<MiningTabProps> = ({
         <motion.div
           animate={isMining ? { scale: [1, 1.02, 1] } : {}}
           transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute w-[228px] h-[228px] rounded-full overflow-hidden border-2 border-white/80 shadow-[0_0_30px_rgba(255,120,0,0.65),inset_0_0_20px_rgba(255,174,0,0.35)] flex items-center justify-center bg-white cursor-pointer"
+          className="absolute w-[228px] h-[228px] rounded-full overflow-hidden border-2 border-white/80 shadow-[0_0_30px_rgba(255,120,0,0.65),inset_0_0_20px_rgba(255,174,0,0.35)] flex items-center justify-center bg-[#FDFEFE] cursor-pointer"
           onClick={handleAction}
         >
+          {/* Static Character Poster (Never displays black circle when idle) */}
+          <img
+            src="/katana_poster.png"
+            alt="Reactor Core"
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+              isMining ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            }`}
+          />
+
+          {/* Active 3D Katana Video (Plays when mining starts) */}
           <video
             ref={videoRef}
             src="/Katana_er_moddhe_sining_effet_20261001211343.mp4"
+            poster="/katana_poster.png"
             loop
             muted
             playsInline
             preload="auto"
-            className="w-full h-full object-cover"
+            className={`w-full h-full object-cover transition-opacity duration-500 ${
+              isMining ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
           />
         </motion.div>
       </div>
