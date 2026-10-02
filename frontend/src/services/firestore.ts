@@ -638,3 +638,44 @@ export async function adminBroadcastFirestore(
   return { total, sent, failed };
 }
 
+export interface AppSettings {
+  adsgram_block_id?: string;
+  adsgram_enabled?: boolean;
+}
+
+export async function getAppSettings(): Promise<AppSettings> {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'config'));
+    if (snap.exists()) {
+      return snap.data() as AppSettings;
+    }
+  } catch (e) {
+    console.warn('Failed to load app settings from firestore:', e);
+  }
+
+  // Fallback to localStorage or safe defaults
+  const localBlockId = localStorage.getItem('eforce_adsgram_block_id') || '';
+  const localEnabled = localStorage.getItem('eforce_adsgram_enabled') === 'true';
+
+  return {
+    adsgram_block_id: localBlockId,
+    adsgram_enabled: localEnabled
+  };
+}
+
+export async function updateAppSettings(settings: Partial<AppSettings>): Promise<void> {
+  try {
+    const ref = doc(db, 'settings', 'config');
+    await setDoc(ref, settings, { merge: true });
+  } catch (e) {
+    console.warn('Failed to save settings to firestore:', e);
+  }
+
+  if (settings.adsgram_block_id !== undefined) {
+    localStorage.setItem('eforce_adsgram_block_id', settings.adsgram_block_id);
+  }
+  if (settings.adsgram_enabled !== undefined) {
+    localStorage.setItem('eforce_adsgram_enabled', String(settings.adsgram_enabled));
+  }
+}
+

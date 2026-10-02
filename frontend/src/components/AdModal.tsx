@@ -94,6 +94,7 @@ export const AdModal: React.FC<AdModalProps> = ({ task, isOpen, onClose, onAdFin
           <div className="relative aspect-video w-full bg-black flex items-center justify-center overflow-hidden">
             <video
               src="/Katana_er_moddhe_sining_effet_20261001211343.mp4"
+              poster="/katana_poster.png"
               autoPlay
               loop
               muted
