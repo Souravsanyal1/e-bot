@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+.pnp
+.pnp.js
+
+# Environment Files
+.env
+.env.local
+.env.production
+
+# Embedded Database & Logs
+data/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Vite Build (optional, keep dist if you want prebuilt static files, or ignore)
+dist/
+.tmp/
