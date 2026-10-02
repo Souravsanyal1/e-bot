@@ -5,6 +5,16 @@ import type { Task } from '../types';
 import { tg } from '../services/telegram';
 import { AdModal } from './AdModal';
 
+declare global {
+  interface Window {
+    Adsgram?: {
+      init: (params: { blockId: string; debug?: boolean }) => {
+        show: () => Promise<{ done: boolean; description: string; state: string }>;
+      };
+    };
+  }
+}
+
 interface TasksTabProps {
   standardTasks: Task[];
   specialTasks: Task[];
@@ -29,6 +39,24 @@ export const TasksTab: React.FC<TasksTabProps> = ({
 
     // If task requires watching an Ad
     if (task.ad_required) {
+      // Try official Adsgram Ad Controller first
+      if (window.Adsgram) {
+        setLoadingTaskId(task.id);
+        try {
+          const AdController = window.Adsgram.init({ blockId: "51502" });
+          const result = await AdController.show();
+          if (result && result.done) {
+            await handleAdFinished(task);
+            return;
+          }
+        } catch (adError) {
+          console.warn("Adsgram ad bypassed or error, opening player modal:", adError);
+        } finally {
+          setLoadingTaskId(null);
+        }
+      }
+
+      // Fallback in-app player modal
       setSelectedAdTask(task);
       setIsAdOpen(true);
       return;
