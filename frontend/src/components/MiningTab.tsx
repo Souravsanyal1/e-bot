@@ -29,15 +29,17 @@ export const MiningTab: React.FC<MiningTabProps> = ({
 
   const isMining = Boolean(mining?.is_mining);
 
-  // Play video only when mining is active; pause when idle
+  // Dynamic video speed and glow effect based on mining status
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     if (isMining) {
+      video.playbackRate = 1.2;
       video.play().catch(() => {});
     } else {
-      video.pause();
+      video.playbackRate = 0.85;
+      video.play().catch(() => {});
     }
   }, [isMining]);
 
@@ -180,33 +182,23 @@ export const MiningTab: React.FC<MiningTabProps> = ({
           </defs>
         </svg>
 
-        {/* Central Video Reactor (Seamlessly fills the inner ring with zero black gap) */}
+        {/* Central Video Reactor (Using Change_video_logo_background_colors video asset) */}
         <motion.div
-          animate={isMining ? { scale: [1, 1.02, 1] } : {}}
-          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute w-[228px] h-[228px] rounded-full overflow-hidden border-2 border-white/80 shadow-[0_0_30px_rgba(255,120,0,0.65),inset_0_0_20px_rgba(255,174,0,0.35)] flex items-center justify-center bg-[#FDFEFE] cursor-pointer"
+          animate={isMining ? { scale: [1, 1.03, 1] } : {}}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute w-[228px] h-[228px] rounded-full overflow-hidden border-2 border-white/80 shadow-[0_0_30px_rgba(255,120,0,0.65),inset_0_0_20px_rgba(255,174,0,0.35)] flex items-center justify-center bg-black cursor-pointer"
           onClick={handleAction}
         >
-          {/* Static Character Poster (Never displays black circle when idle) */}
-          <img
-            src="/katana_poster.png"
-            alt="Reactor Core"
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-              isMining ? 'opacity-0 pointer-events-none' : 'opacity-100'
-            }`}
-          />
-
-          {/* Active 3D Katana Video (Plays when mining starts) */}
           <video
             ref={videoRef}
-            src="/Katana_er_moddhe_sining_effet_20261001211343.mp4"
-            poster="/katana_poster.png"
+            src="/Change_video_logo_background_colors_20261002102002.mp4"
+            autoPlay
             loop
             muted
             playsInline
             preload="auto"
-            className={`w-full h-full object-cover transition-opacity duration-500 ${
-              isMining ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            className={`w-full h-full object-cover transition-all duration-500 ${
+              isMining ? 'brightness-110 saturate-125' : 'brightness-95'
             }`}
           />
         </motion.div>
