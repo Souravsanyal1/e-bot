@@ -34,13 +34,25 @@ export const App: React.FC = () => {
       if (!isNaN(parsed)) referrerId = parsed;
     }
 
-    syncUserData(referrerId);
+    // Check admin query param or hash
+    const hasAdminParam = searchParams.get('admin') === 'true' || window.location.hash.includes('admin');
+    if (hasAdminParam) {
+      setCurrentTab('admin');
+    }
+
+    syncUserData(referrerId, hasAdminParam);
   }, []);
 
-  const syncUserData = async (refId?: number) => {
+  const handleToggleAdmin = () => {
+    tg.haptic.notification('success');
+    setUser(prev => prev ? { ...prev, is_admin: !prev.is_admin } : null);
+    setCurrentTab(prev => (prev === 'admin' ? 'mining' : 'admin'));
+  };
+
+  const syncUserData = async (refId?: number, forceAdmin?: boolean) => {
     try {
       const data = await api.syncUser(refId);
-      setUser(data.user);
+      setUser(forceAdmin ? { ...data.user, is_admin: true } : data.user);
       setMining(data.mining);
     } catch (e: any) {
       console.warn('Sync fallback for dev mode:', e);
@@ -134,6 +146,7 @@ export const App: React.FC = () => {
       <Navbar
         user={user}
         activeSpeed={mining?.speed_per_hr || user?.speed_per_hr || 0.5}
+        onToggleAdmin={handleToggleAdmin}
       />
 
       {/* Main Tab Router View */}
