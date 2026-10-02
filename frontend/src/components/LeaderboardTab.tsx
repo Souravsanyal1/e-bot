@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trophy, Medal, Zap, Crown } from 'lucide-react';
 import type { LeaderboardUser, User } from '../types';
+import { getTelegramUserPhoto } from '../services/firestore';
 
 interface LeaderboardTabProps {
   topMiners: LeaderboardUser[];
@@ -13,13 +14,34 @@ const MinerAvatar: React.FC<{ name: string; id: number; photoUrl?: string; class
   photoUrl,
   className = "w-full h-full"
 }) => {
+  const [imgSrc, setImgSrc] = useState<string | null>(photoUrl || null);
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    if (photoUrl) {
+      setImgSrc(photoUrl);
+      return;
+    }
+
+    const cached = localStorage.getItem(`tg_photo_${id}`);
+    if (cached) {
+      setImgSrc(cached);
+      return;
+    }
+
+    getTelegramUserPhoto(id).then((url) => {
+      if (url) {
+        localStorage.setItem(`tg_photo_${id}`, url);
+        setImgSrc(url);
+      }
+    }).catch(() => {});
+  }, [id, photoUrl]);
+
   const fallbackUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name || String(id))}&backgroundColor=181824`;
-  const src = !imgError && photoUrl ? photoUrl : fallbackUrl;
 
   return (
     <img
-      src={src}
+      src={!imgError && imgSrc ? imgSrc : fallbackUrl}
       alt={name}
       onError={() => setImgError(true)}
       className={`${className} object-cover rounded-full select-none`}

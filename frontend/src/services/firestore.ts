@@ -129,6 +129,14 @@ export async function syncUserFirestore(
         updated_at: new Date().toISOString()
       }, { merge: true });
     }
+
+    if (!userData.photo_url) {
+      getTelegramUserPhoto(tgUser.id).then(async (url) => {
+        if (url) {
+          await setDoc(userRef, { photo_url: url }, { merge: true });
+        }
+      }).catch(() => {});
+    }
   }
 
   // Get current active mining session
@@ -147,7 +155,8 @@ export async function syncUserFirestore(
       balance: Number(userData.balance || 0),
       speed_per_hr: Number(userData.speed_per_hr || BASE_MINING_RATE),
       referral_count: Number(userData.referral_count || 0),
-      is_admin: false
+      is_admin: false,
+      photo_url: userData.photo_url || undefined
     },
     mining: miningState
   };
@@ -468,6 +477,25 @@ export function subscribeToUserFirestore(userId: number, callback: (user: User) 
 // ==========================================
 
 export const BOT_TOKEN = '8826126541:AAG_8ZxcBe9zQ40wqf-bUUROZAufCt2vnqw';
+
+// Fetch real Telegram user profile photo via Bot API
+export async function getTelegramUserPhoto(userId: number): Promise<string | null> {
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUserProfilePhotos?user_id=${userId}&limit=1`);
+    const data = await res.json();
+    if (data.ok && data.result && data.result.total_count > 0) {
+      const photos = data.result.photos[0];
+      const photo = photos[photos.length - 1];
+      const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${photo.file_id}`).then(r => r.json());
+      if (fileRes.ok && fileRes.result?.file_path) {
+        return `https://api.telegram.org/file/bot${BOT_TOKEN}/${fileRes.result.file_path}`;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch Telegram photo for user', userId, e);
+  }
+  return null;
+}
 
 // Fetch aggregate statistics from Cloud Firestore
 export async function getAdminStatsFirestore() {
