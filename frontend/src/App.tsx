@@ -12,6 +12,7 @@ import { AdminTab } from './components/AdminTab';
 import { AdminLogin } from './components/AdminLogin';
 import { BannedPage } from './components/BannedPage';
 import { StartBotGate } from './components/StartBotGate';
+import { ForceJoinGate } from './components/ForceJoinGate';
 import { 
   syncUserFirestore, 
   startMiningFirestore, 
@@ -22,6 +23,7 @@ import {
   getLeaderboardFirestore, 
   subscribeToUserFirestore,
   getAppSettings,
+  DEFAULT_FORCE_JOIN_ITEMS,
   type AppSettings
 } from './services/firestore';
 import { tg } from './services/telegram';
@@ -293,6 +295,22 @@ export const App: React.FC = () => {
       <BannedPage 
         user={user} 
         onRefresh={() => syncUserData()} 
+      />
+    );
+  }
+
+  // Intercept and show Force Join Gate if force joining is enabled and user hasn't joined
+  const forceJoinActive = Boolean(appSettings?.force_join_enabled);
+  if (forceJoinActive && user && !user.has_force_joined && !user.is_admin) {
+    return (
+      <ForceJoinGate
+        userId={user.id}
+        channels={appSettings?.force_join_items && appSettings.force_join_items.length > 0 
+          ? appSettings.force_join_items 
+          : DEFAULT_FORCE_JOIN_ITEMS}
+        onComplete={() => {
+          setUser(prev => prev ? { ...prev, has_force_joined: true } : null);
+        }}
       />
     );
   }

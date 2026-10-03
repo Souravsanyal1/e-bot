@@ -21,7 +21,8 @@ import {
   updateAppSettings,
   getAllWithdrawalsFirestore,
   adminUpdateWithdrawalStatusFirestore,
-  clearAllUserDataFirestore
+  clearAllUserDataFirestore,
+  DEFAULT_FORCE_JOIN_ITEMS
 } from '../services/firestore';
 import { 
   verifyWalletAndReferCodeOnChain, 
@@ -29,7 +30,7 @@ import {
   NETWORKS 
 } from '../services/blockchain';
 import { api } from '../services/api';
-import type { AdminStats, Task, WithdrawalRequest } from '../types';
+import type { AdminStats, Task, WithdrawalRequest, ForceJoinItem } from '../types';
 
 interface AdminTabProps {
   adminEmail?: string;
@@ -118,6 +119,12 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
   const [savingAntiCheat, setSavingAntiCheat] = useState(false);
   const [antiCheatSaved, setAntiCheatSaved] = useState(false);
 
+  // Force Joining System State
+  const [forceJoinEnabled, setForceJoinEnabled] = useState(true);
+  const [forceJoinItems, setForceJoinItems] = useState<ForceJoinItem[]>(DEFAULT_FORCE_JOIN_ITEMS);
+  const [savingForceJoin, setSavingForceJoin] = useState(false);
+  const [forceJoinSaved, setForceJoinSaved] = useState(false);
+
   // Clear All User Data state
   const [clearingData, setClearingData] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
@@ -161,6 +168,13 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
       setMaxAccountsPerDevice(appSettings.max_accounts_per_device !== undefined ? appSettings.max_accounts_per_device : 1);
       setMaxAccountsPerIp(appSettings.max_accounts_per_ip !== undefined ? appSettings.max_accounts_per_ip : 2);
       setMaxIpsPerAccount(appSettings.max_ips_per_account !== undefined ? appSettings.max_ips_per_account : 4);
+
+      setForceJoinEnabled(appSettings.force_join_enabled !== false);
+      setForceJoinItems(
+        Array.isArray(appSettings.force_join_items) && appSettings.force_join_items.length > 0
+          ? appSettings.force_join_items
+          : DEFAULT_FORCE_JOIN_ITEMS
+      );
     } catch (err: any) {
       console.warn('Admin load error:', err);
     } finally {
@@ -190,6 +204,45 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
     } finally {
       setSavingAntiCheat(false);
     }
+  };
+
+  const handleSaveForceJoin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingForceJoin(true);
+    try {
+      await updateAppSettings({
+        force_join_enabled: forceJoinEnabled,
+        force_join_items: forceJoinItems
+      });
+      setForceJoinSaved(true);
+      if (onSettingsUpdated) {
+        onSettingsUpdated(await getAppSettings());
+      }
+      setTimeout(() => setForceJoinSaved(false), 3000);
+    } catch (err: any) {
+      alert('Error saving force join settings: ' + err.message);
+    } finally {
+      setSavingForceJoin(false);
+    }
+  };
+
+  const handleAddForceJoinItem = () => {
+    const newItem: ForceJoinItem = {
+      id: 'item_' + Date.now(),
+      name: 'New Telegram Community',
+      type: 'channel',
+      username_or_id: '@channel_username',
+      invite_link: 'https://t.me/channel_username'
+    };
+    setForceJoinItems(prev => [...prev, newItem]);
+  };
+
+  const handleRemoveForceJoinItem = (id: string) => {
+    setForceJoinItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleUpdateForceJoinItem = (id: string, updates: Partial<ForceJoinItem>) => {
+    setForceJoinItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
   };
 
   const handleSaveMiningSettings = async (e: React.FormEvent) => {
@@ -1208,6 +1261,184 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
               </form>
             </div>
 
+            {/* FORCE JOINING SYSTEM CONFIGURATION PANEL */}
+            <div className="glass-panel p-6 rounded-2xl border border-white/10 mt-6 relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Send size={18} className="text-cyan-400" />
+                    Force Joining System (Mandatory Telegram Channels & Groups)
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Enforce users to subscribe to official Telegram channels & groups before they can access mining and rewards.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 ${
+                    forceJoinEnabled
+                      ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                      : 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/30'
+                  }`}>
+                    <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+                    <span>{forceJoinEnabled ? 'Force Join ACTIVE' : 'Force Join DISABLED'}</span>
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveForceJoin} className="space-y-4">
+                {/* Master Switch */}
+                <div className="p-3.5 rounded-xl bg-black/40 border border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-cyan-500/15 text-cyan-400">
+                      <ShieldCheck size={20} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-white block">Master Force Join Gate Switch</span>
+                      <span className="text-[11px] text-gray-400 block">
+                        When enabled, all miners must join the required communities below to unlock the app interface.
+                      </span>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={forceJoinEnabled}
+                      onChange={(e) => setForceJoinEnabled(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+                  </label>
+                </div>
+
+                {/* Important Bot Admin Notice */}
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs flex items-start gap-2.5">
+                  <AlertTriangle size={18} className="shrink-0 mt-0.5 text-amber-400" />
+                  <div className="space-y-1">
+                    <p className="font-bold text-amber-200">⚠️ CRITICAL BOT ADMIN REQUIREMENT:</p>
+                    <p className="text-gray-300 leading-relaxed">
+                      For Telegram API to verify if a user has joined your channel or group, your bot <code className="text-orange-300 font-mono font-bold">@Elite_Force_Official_Mining_bot</code> <strong>MUST</strong> be added as an <strong>Administrator</strong> in each channel and group. Without admin rights in the chat, Telegram restricts bots from checking member status!
+                    </p>
+                  </div>
+                </div>
+
+                {/* Communities List */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-gray-300">
+                      Mandatory Communities ({forceJoinItems.length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddForceJoinItem}
+                      className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      <span>Add Community</span>
+                    </button>
+                  </div>
+
+                  {forceJoinItems.map((item, index) => (
+                    <div key={item.id} className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono font-bold text-cyan-400">
+                          Community #{index + 1}
+                        </span>
+                        {forceJoinItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveForceJoinItem(item.id)}
+                            className="p-1 rounded-lg text-red-400 hover:bg-red-500/15 transition-all cursor-pointer"
+                            title="Remove community"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                          <label className="text-[11px] text-gray-400 font-semibold block mb-1">
+                            Community Name:
+                          </label>
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => handleUpdateForceJoinItem(item.id, { name: e.target.value })}
+                            className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                            placeholder="e.g. Official Channel"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] text-gray-400 font-semibold block mb-1">
+                            Type:
+                          </label>
+                          <select
+                            value={item.type}
+                            onChange={(e) => handleUpdateForceJoinItem(item.id, { type: e.target.value as 'channel' | 'group' })}
+                            className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                          >
+                            <option value="channel">Channel (Broadcast)</option>
+                            <option value="group">Group (Community Chat)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] text-gray-400 font-semibold block mb-1">
+                            Username or Chat ID:
+                          </label>
+                          <input
+                            type="text"
+                            value={item.username_or_id}
+                            onChange={(e) => handleUpdateForceJoinItem(item.id, { username_or_id: e.target.value })}
+                            className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                            placeholder="e.g. @Elite_Force_Channel"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] text-gray-400 font-semibold block mb-1">
+                            Invite Link:
+                          </label>
+                          <input
+                            type="text"
+                            value={item.invite_link}
+                            onChange={(e) => handleUpdateForceJoinItem(item.id, { invite_link: e.target.value })}
+                            className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                            placeholder="https://t.me/..."
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={savingForceJoin}
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-black text-xs tracking-wider uppercase shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:brightness-110 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    {savingForceJoin ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={16} />
+                    )}
+                    <span>Save Force Join Configuration</span>
+                  </button>
+
+                  {forceJoinSaved && (
+                    <span className="text-xs font-bold text-green-400 flex items-center gap-1.5 animate-pulse">
+                      <CheckCircle2 size={15} /> Force Join Settings Saved in Firestore!
+                    </span>
+                  )}
+                </div>
+              </form>
+            </div>
+
             {/* Ad Monetization & Monetag Configuration Panel */}
             <div className="glass-panel p-6 rounded-2xl border border-white/10 mt-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
@@ -1960,6 +2191,11 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                             {u.has_started_bot && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 font-mono">
                                 /start ✓
+                              </span>
+                            )}
+                            {u.has_force_joined && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/25 font-mono">
+                                Channels Joined ✓
                               </span>
                             )}
                           </div>

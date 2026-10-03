@@ -12,7 +12,9 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { User, MiningState, Task, ReferralData, LeaderboardUser, WithdrawalRequest } from '../types';
+import type { User, MiningState, Task, ReferralData, LeaderboardUser, WithdrawalRequest, ForceJoinItem } from '../types';
+
+export const BOT_TOKEN = '8826126541:AAG_8ZxcBe9zQ40wqf-bUUROZAufCt2vnqw';
 
 const BASE_MINING_RATE = 0.5; // E-FORCE per hour
 const SESSION_DURATION_HOURS = 24;
@@ -122,6 +124,63 @@ export async function verifyUserBotStarted(userId: number): Promise<boolean> {
   }
 }
 
+// Check if user is a member/admin of a Telegram Channel or Group
+export async function verifyChannelMembership(
+  userId: number, 
+  chatUsernameOrId: string
+): Promise<{ joined: boolean; error?: string; botNotAdmin?: boolean }> {
+  // Allow admin IDs in testing
+  if (userId === 999888777 || userId === 111111111) {
+    return { joined: true };
+  }
+
+  const cleanChat = chatUsernameOrId.trim();
+  if (!cleanChat) return { joined: true };
+
+  try {
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(cleanChat)}&user_id=${userId}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.ok && data.result) {
+      const status = data.result.status;
+      if (status === 'creator' || status === 'administrator' || status === 'member') {
+        return { joined: true };
+      }
+      if (status === 'restricted' && data.result.is_member) {
+        return { joined: true };
+      }
+      return { joined: false, error: 'User is not a member of this chat' };
+    }
+
+    if (data.description) {
+      const desc = String(data.description).toLowerCase();
+      if (desc.includes('member list is inaccessible') || desc.includes('chat not found')) {
+        return { 
+          joined: false, 
+          botNotAdmin: true, 
+          error: 'Bot needs Admin rights in this channel to verify automatically.' 
+        };
+      }
+      return { joined: false, error: data.description };
+    }
+
+    return { joined: false, error: 'Verification failed' };
+  } catch (err: any) {
+    console.warn('Membership verification error:', err);
+    return { joined: false, error: err.message || 'Network error' };
+  }
+}
+
+// Mark user as having completed force join requirements
+export async function saveUserForceJoined(userId: number): Promise<void> {
+  const userRef = doc(db, 'users', String(userId));
+  await setDoc(userRef, {
+    has_force_joined: true,
+    force_joined_at: new Date().toISOString()
+  }, { merge: true });
+}
+
 // 1. Sync / Initialize User in Cloud Firestore with Anti-Cheat Security Audit
 export async function syncUserFirestore(
   tgUser: { id: number; username?: string; first_name?: string; last_name?: string },
@@ -173,6 +232,7 @@ export async function syncUserFirestore(
       ban_reason: '',
       banned_at: '',
       has_started_bot: true,
+      has_force_joined: false,
       current_ip: clientIp,
       device_id: deviceId,
       ip_history: clientIp !== 'unknown' ? [clientIp] : [],
@@ -353,7 +413,9 @@ export async function syncUserFirestore(
       banned_at: bannedAt,
       current_ip: clientIp,
       device_id: deviceId,
-      ip_history: currentHistory
+      ip_history: currentHistory,
+      has_started_bot: Boolean(userData.has_started_bot),
+      has_force_joined: Boolean(userData.has_force_joined)
     },
     mining: miningState
   };
@@ -670,7 +732,9 @@ export function subscribeToUserFirestore(userId: number, callback: (user: User) 
         photo_url: data.photo_url || undefined,
         is_banned: Boolean(data.is_banned),
         ban_reason: data.ban_reason || '',
-        banned_at: data.banned_at || ''
+        banned_at: data.banned_at || '',
+        has_started_bot: Boolean(data.has_started_bot),
+        has_force_joined: Boolean(data.has_force_joined)
       });
     }
   });
@@ -679,8 +743,6 @@ export function subscribeToUserFirestore(userId: number, callback: (user: User) 
 // ==========================================
 // 9. ADMIN PANEL DIRECT FIRESTORE HELPERS
 // ==========================================
-
-export const BOT_TOKEN = '8826126541:AAG_8ZxcBe9zQ40wqf-bUUROZAufCt2vnqw';
 
 // Fetch real Telegram user profile photo via Bot API
 export async function getTelegramUserPhoto(userId: number): Promise<string | null> {
@@ -873,6 +935,23 @@ export async function adminBroadcastFirestore(
   return { total, sent, failed };
 }
 
+export const DEFAULT_FORCE_JOIN_ITEMS: ForceJoinItem[] = [
+  {
+    id: 'channel_official',
+    name: 'Official Announcement Channel',
+    type: 'channel',
+    username_or_id: '@Elite_Force_Channel',
+    invite_link: 'https://t.me/Elite_Force_Channel'
+  },
+  {
+    id: 'group_official',
+    name: 'Official Community Group',
+    type: 'group',
+    username_or_id: '@Elite_Force_Group',
+    invite_link: 'https://t.me/Elite_Force_Group'
+  }
+];
+
 export interface AppSettings {
   monetag_zone_id?: string;
   monetag_enabled?: boolean;
@@ -900,6 +979,10 @@ export interface AppSettings {
   max_accounts_per_device?: number;
   max_accounts_per_ip?: number;
   max_ips_per_account?: number;
+
+  // Force Joining System Settings
+  force_join_enabled?: boolean;
+  force_join_items?: ForceJoinItem[];
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
@@ -932,7 +1015,13 @@ export async function getAppSettings(): Promise<AppSettings> {
         auto_ban_multi_ip: data.auto_ban_multi_ip !== false,
         max_accounts_per_device: data.max_accounts_per_device !== undefined ? Number(data.max_accounts_per_device) : 1,
         max_accounts_per_ip: data.max_accounts_per_ip !== undefined ? Number(data.max_accounts_per_ip) : 2,
-        max_ips_per_account: data.max_ips_per_account !== undefined ? Number(data.max_ips_per_account) : 4
+        max_ips_per_account: data.max_ips_per_account !== undefined ? Number(data.max_ips_per_account) : 4,
+
+        // Force Join parameters
+        force_join_enabled: data.force_join_enabled !== undefined ? Boolean(data.force_join_enabled) : true,
+        force_join_items: Array.isArray(data.force_join_items) && data.force_join_items.length > 0 
+          ? data.force_join_items 
+          : DEFAULT_FORCE_JOIN_ITEMS
       };
     }
   } catch (e) {
@@ -985,7 +1074,9 @@ export async function getAppSettings(): Promise<AppSettings> {
     auto_ban_multi_ip: localAutoBanIp,
     max_accounts_per_device: localMaxDev,
     max_accounts_per_ip: localMaxIp,
-    max_ips_per_account: localMaxIpsAcc
+    max_ips_per_account: localMaxIpsAcc,
+    force_join_enabled: true,
+    force_join_items: DEFAULT_FORCE_JOIN_ITEMS
   };
 }
 

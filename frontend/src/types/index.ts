@@ -14,6 +14,16 @@ export interface User {
   ip_history?: string[];
   device_id?: string;
   has_started_bot?: boolean;
+  has_force_joined?: boolean;
+  force_joined_at?: string;
+}
+
+export interface ForceJoinItem {
+  id: string;
+  name: string;
+  type: 'channel' | 'group';
+  username_or_id: string;
+  invite_link: string;
 }
 
 export interface MiningState {
