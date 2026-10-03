@@ -8,7 +8,8 @@ import {
   where, 
   limit, 
   onSnapshot,
-  deleteDoc
+  deleteDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { User, MiningState, Task, ReferralData, LeaderboardUser, WithdrawalRequest } from '../types';
@@ -977,5 +978,43 @@ export async function adminUpdateWithdrawalStatusFirestore(
     },
     { merge: true }
   );
+}
+
+// 12. Wipe/Clear All User Data from Cloud Firestore (Users, Mining Sessions, User Tasks, Referrals, Withdrawals)
+export async function clearAllUserDataFirestore(): Promise<{ success: boolean; deletedSummary: Record<string, number> }> {
+  const collectionsToWipe = ['users', 'user_tasks', 'mining_sessions', 'referrals', 'withdrawals'];
+  const deletedSummary: Record<string, number> = {};
+
+  for (const colName of collectionsToWipe) {
+    try {
+      const snap = await getDocs(collection(db, colName));
+      let count = 0;
+      let batch = writeBatch(db);
+      let batchCount = 0;
+
+      for (const d of snap.docs) {
+        batch.delete(d.ref);
+        batchCount++;
+        count++;
+
+        if (batchCount >= 400) {
+          await batch.commit();
+          batch = writeBatch(db);
+          batchCount = 0;
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+
+      deletedSummary[colName] = count;
+    } catch (e: any) {
+      console.warn(`Error wiping collection ${colName}:`, e.message);
+      deletedSummary[colName] = 0;
+    }
+  }
+
+  return { success: true, deletedSummary };
 }
 

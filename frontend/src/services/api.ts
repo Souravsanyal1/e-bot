@@ -214,6 +214,12 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ bonus_speed: bonusSpeed, bonus_coins: bonusCoins }),
       });
+    },
+
+    async clearAllUserData(): Promise<{ success: boolean; message: string }> {
+      return request('/admin/clear-all-user-data', {
+        method: 'POST',
+      });
     }
   }
 };

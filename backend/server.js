@@ -538,6 +538,32 @@ async function startServer() {
     return { success: true, message: 'User boosted successfully!' };
   });
 
+  // Admin: Clear All User Data (wipes users, user_tasks, referrals, and Redis leaderboard)
+  fastify.post('/api/admin/clear-all-user-data', async (_req, reply) => {
+    try {
+      await db.run('DELETE FROM users');
+      await db.run('DELETE FROM user_tasks');
+      await db.run('DELETE FROM referrals');
+
+      try {
+        await cache.del('leaderboard:miners');
+      } catch (_) {}
+
+      try {
+        await firestoreDB.clearAllUserData();
+      } catch (fErr) {
+        console.warn('Backend firestore clear error:', fErr.message);
+      }
+
+      return { 
+        success: true, 
+        message: 'All user data has been permanently cleared from SQLite and Cloud Firestore!' 
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
   // Start Fastify listener
   try {
     await fastify.listen({ port: config.PORT, host: config.HOST });

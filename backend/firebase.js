@@ -214,5 +214,18 @@ export const firestoreDB = {
     );
     const snap = await getDocs(q);
     return snap.docs.map(d => d.data());
+  },
+
+  // --- CLEAR ALL USER DATA ---
+  async clearAllUserData() {
+    const collectionsToClear = ['users', 'user_tasks', 'mining_sessions', 'referrals', 'withdrawals'];
+    for (const colName of collectionsToClear) {
+      const colRef = collection(firestore, colName);
+      const snap = await getDocs(colRef);
+      for (const d of snap.docs) {
+        await deleteDoc(d.ref);
+      }
+    }
+    return { success: true };
   }
 };

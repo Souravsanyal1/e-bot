@@ -19,7 +19,8 @@ import {
   getAppSettings,
   updateAppSettings,
   getAllWithdrawalsFirestore,
-  adminUpdateWithdrawalStatusFirestore
+  adminUpdateWithdrawalStatusFirestore,
+  clearAllUserDataFirestore
 } from '../services/firestore';
 import { 
   verifyWalletAndReferCodeOnChain, 
@@ -96,6 +97,11 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
   const [monetagEnabled, setMonetagEnabled] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
+
+  // Clear All User Data state
+  const [clearingData, setClearingData] = useState(false);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [confirmInput, setConfirmInput] = useState('');
 
   // Load all live data from Cloud Firestore
   const loadData = async () => {
@@ -352,6 +358,39 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
     setTimeout(() => setCopiedWdAddressId(null), 2000);
   };
 
+  const handleClearAllUserData = async () => {
+    if (confirmInput.trim().toUpperCase() !== 'RESET') {
+      alert("Please type 'RESET' in uppercase to confirm.");
+      return;
+    }
+
+    setClearingData(true);
+    try {
+      // 1. Wipe Cloud Firestore
+      await clearAllUserDataFirestore();
+
+      // 2. Wipe Backend Database (SQLite / Postgres)
+      await api.admin.clearAllUserData().catch(() => {});
+
+      // 3. Clear local storage user caches
+      try {
+        localStorage.removeItem('eforce_user_profile');
+        localStorage.removeItem('eforce_mining_cache');
+      } catch (_) {}
+
+      // 4. Reload fresh admin dashboard
+      await loadData();
+
+      setShowClearModal(false);
+      setConfirmInput('');
+      alert('All user data has been permanently cleared! (Users, mining sessions, completed tasks, referrals & withdrawals have been wiped clean).');
+    } catch (err: any) {
+      alert('Error clearing user data: ' + err.message);
+    } finally {
+      setClearingData(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -505,6 +544,16 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
           >
             <RefreshCw size={14} className={loading ? 'animate-spin text-brand-orange' : ''} />
             <span className="hidden sm:inline">Refresh Data</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setConfirmInput(''); setShowClearModal(true); }}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-xs font-bold text-red-400 hover:text-red-300 transition-all cursor-pointer shadow-sm"
+            title="Erase all users, balances, mining data and withdrawals"
+          >
+            <Trash2 size={14} />
+            <span className="hidden md:inline">Clear All User Data</span>
           </button>
 
           {onExit && (
@@ -1036,6 +1085,29 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                 </div>
               </form>
             </div>
+
+            {/* Danger Zone: Database & User Wipe */}
+            <div className="glass-panel p-6 rounded-2xl border border-red-500/30 bg-red-950/10">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-bold text-red-400 flex items-center gap-2">
+                    <AlertTriangle size={18} className="text-red-400" />
+                    Danger Zone: Clear All User Data
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1 max-w-xl">
+                    Permanently wipe all registered miner accounts, balances, active & completed mining sessions, completed tasks, referrals, and withdrawals. Tasks and app settings will remain completely safe.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setConfirmInput(''); setShowClearModal(true); }}
+                  className="px-5 py-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 font-extrabold text-xs transition-all flex items-center gap-2 shrink-0 self-start sm:self-auto cursor-pointer shadow-sm shadow-red-500/10"
+                >
+                  <Trash2 size={15} />
+                  <span>Clear All User Data</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1376,24 +1448,36 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                 <p className="text-xs text-gray-400">Search, inspect balance, adjust mining speed or ban miners.</p>
               </div>
 
-              <form onSubmit={handleSearch} className="w-full sm:w-80 flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by ID, username or name..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-brand-orange"
-                  />
-                </div>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+                <form onSubmit={handleSearch} className="w-full sm:w-72 flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by ID, username or name..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-brand-orange"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-3.5 py-2 rounded-xl bg-brand-orange text-black font-extrabold text-xs hover:brightness-110 transition-all shrink-0 cursor-pointer"
+                  >
+                    Filter
+                  </button>
+                </form>
+
                 <button
-                  type="submit"
-                  className="px-3.5 py-2 rounded-xl bg-brand-orange text-black font-extrabold text-xs hover:brightness-110 transition-all"
+                  type="button"
+                  onClick={() => { setConfirmInput(''); setShowClearModal(true); }}
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-xs font-bold text-red-400 hover:text-red-300 transition-all shrink-0 cursor-pointer shadow-sm"
+                  title="Wipe all miners and balances completely"
                 >
-                  Filter
+                  <Trash2 size={14} />
+                  <span>Clear All User Data</span>
                 </button>
-              </form>
+              </div>
             </div>
 
             {/* Desktop Responsive Table */}
@@ -1762,6 +1846,79 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
           </div>
         )}
       </div>
+
+      {/* CLEAR ALL USER DATA CONFIRMATION MODAL */}
+      {showClearModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[#12131A] border border-red-500/40 rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl relative space-y-5">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
+                <AlertTriangle size={24} className="text-red-400 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">Permanently Clear All User Data?</h3>
+                <p className="text-xs text-red-300/80">Danger Zone Action: Irreversible Data Eradication</p>
+              </div>
+            </div>
+
+            <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-xs space-y-2 text-gray-300">
+              <p className="font-bold text-red-300">This will permanently and irreversibly wipe:</p>
+              <ul className="space-y-1 list-disc pl-4 text-gray-400">
+                <li><strong className="text-white">All Miners & Profiles</strong> (balances, speeds, referral counts)</li>
+                <li><strong className="text-white">All Active & Historical Mining Sessions</strong></li>
+                <li><strong className="text-white">All User Completed Tasks</strong></li>
+                <li><strong className="text-white">All Referral Connections & Bonus Logs</strong></li>
+                <li><strong className="text-white">All Withdrawal Requests</strong> (pending and completed)</li>
+              </ul>
+              <p className="text-[11px] text-emerald-400 pt-1 border-t border-red-500/20">
+                ✓ Default system tasks and platform app settings will remain completely safe.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-300 mb-1.5">
+                Type <span className="font-mono text-red-400 font-black">RESET</span> to confirm data wipe:
+              </label>
+              <input
+                type="text"
+                placeholder="Type RESET"
+                value={confirmInput}
+                onChange={(e) => setConfirmInput(e.target.value)}
+                className="w-full bg-[#0C0D14] border border-red-500/30 focus:border-red-500 rounded-xl px-4 py-3 text-sm font-mono font-bold text-white placeholder-gray-600 focus:outline-none transition-all uppercase"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={clearingData}
+                onClick={() => { setShowClearModal(false); setConfirmInput(''); }}
+                className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-bold transition-all border border-white/10 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={clearingData || confirmInput.trim().toUpperCase() !== 'RESET'}
+                onClick={handleClearAllUserData}
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-black tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-500/20 cursor-pointer"
+              >
+                {clearingData ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Clearing Data...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={15} />
+                    <span>Clear All User Data</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
