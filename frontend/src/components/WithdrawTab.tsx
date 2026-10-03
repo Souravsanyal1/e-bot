@@ -406,7 +406,7 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
           </div>
           <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
             <Sparkles size={11} className="text-brand-orange shrink-0" />
-            <span>BEP20 অ্যাড্রেস দিলে স্বয়ংক্রিয়ভাবে ৬-সংখ্যার কোড তৈরি হয়ে বসে যাবে।</span>
+            <span>Enter your BEP20 address to automatically generate your 6-digit verification code.</span>
           </p>
         </div>
 
