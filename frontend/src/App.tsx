@@ -11,6 +11,7 @@ import { LeaderboardTab } from './components/LeaderboardTab';
 import { AdminTab } from './components/AdminTab';
 import { AdminLogin } from './components/AdminLogin';
 import { BannedPage } from './components/BannedPage';
+import { StartBotGate } from './components/StartBotGate';
 import { 
   syncUserFirestore, 
   startMiningFirestore, 
@@ -36,6 +37,8 @@ export const App: React.FC = () => {
   const [referrals, setReferrals] = useState<ReferralData | null>(null);
   const [topMiners, setTopMiners] = useState<LeaderboardUser[]>([]);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [botNotStarted, setBotNotStarted] = useState<boolean>(false);
+  const [referrerId, setReferrerId] = useState<number | undefined>(undefined);
 
   // Admin authentication state using Gmail & Password / Session
   const [adminAuthenticated, setAdminAuthenticated] = useState<boolean>(() => {
@@ -69,10 +72,13 @@ export const App: React.FC = () => {
     // Check referral query param
     const searchParams = new URLSearchParams(window.location.search);
     const startParam = searchParams.get('tgWebAppStartParam') || searchParams.get('startapp') || '';
-    let referrerId: number | undefined;
+    let parsedRefId: number | undefined;
     if (startParam.startsWith('ref_')) {
       const parsed = parseInt(startParam.replace('ref_', ''), 10);
-      if (!isNaN(parsed)) referrerId = parsed;
+      if (!isNaN(parsed)) parsedRefId = parsed;
+    }
+    if (parsedRefId) {
+      setReferrerId(parsedRefId);
     }
 
     // Check if accessing admin route
@@ -104,14 +110,17 @@ export const App: React.FC = () => {
     };
     initMonetag();
 
-    syncUserData(referrerId);
+    syncUserData(parsedRefId);
   }, []);
 
   const syncUserData = async (refId?: number, forceAdmin?: boolean) => {
     const tgUser = tg.getUser();
+    const effectiveRefId = refId !== undefined ? refId : referrerId;
+
     try {
       // 1. Primary: Cloud Firestore Sync
-      const firestoreData = await syncUserFirestore(tgUser, refId);
+      const firestoreData = await syncUserFirestore(tgUser, effectiveRefId);
+      setBotNotStarted(false);
       setUser({ ...firestoreData.user, is_admin: Boolean(forceAdmin) });
       setMining(firestoreData.mining);
 
@@ -126,7 +135,14 @@ export const App: React.FC = () => {
           banned_at: freshUser.banned_at
         } : freshUser);
       });
+      loadTabContent(tgUser.id);
     } catch (e: any) {
+      if (e?.message === 'BOT_NOT_STARTED' || e?.code === 'BOT_NOT_STARTED') {
+        console.warn('User has not initialized /start in Telegram Bot yet.');
+        setBotNotStarted(true);
+        setUser(null);
+        throw e;
+      }
       console.warn('Firestore primary sync fallback:', e);
       setUser({
         id: tgUser.id,
@@ -148,7 +164,6 @@ export const App: React.FC = () => {
         mined_unclaimed: 0.0,
         total_balance: 0.0
       });
-    } finally {
       loadTabContent(tgUser.id);
     }
   };
@@ -254,6 +269,19 @@ export const App: React.FC = () => {
           localStorage.removeItem('eforce_admin_session');
           setAdminAuthenticated(false);
           setAdminEmail('');
+        }}
+      />
+    );
+  }
+
+  // Intercept and show Start Bot Gate if user hasn't sent /start to the Telegram bot
+  if (botNotStarted) {
+    return (
+      <StartBotGate 
+        userId={tg.getUser().id}
+        referrerId={referrerId}
+        onVerify={async () => {
+          await syncUserData(referrerId);
         }}
       />
     );

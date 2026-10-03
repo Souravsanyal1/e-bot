@@ -107,6 +107,21 @@ export function getDeviceId(): string {
   }
 }
 
+// Check if user has initialized /start in Telegram Bot chat
+export async function verifyUserBotStarted(userId: number): Promise<boolean> {
+  // Allow admin IDs in testing
+  if (userId === 999888777 || userId === 111111111) return true;
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getChat?chat_id=${userId}`);
+    const data = await res.json();
+    return Boolean(data.ok && data.result && data.result.id);
+  } catch (e) {
+    console.warn('Bot chat verification error:', e);
+    return false;
+  }
+}
+
 // 1. Sync / Initialize User in Cloud Firestore with Anti-Cheat Security Audit
 export async function syncUserFirestore(
   tgUser: { id: number; username?: string; first_name?: string; last_name?: string },
@@ -136,6 +151,14 @@ export async function syncUserFirestore(
   let userData: any;
 
   if (!userSnap.exists()) {
+    // ENFORCEMENT: /start na dile user list e bosbe na!
+    const hasStarted = await verifyUserBotStarted(tgUser.id);
+    if (!hasStarted) {
+      const err = new Error('BOT_NOT_STARTED');
+      (err as any).code = 'BOT_NOT_STARTED';
+      throw err;
+    }
+
     const validRef = (referrerId && Number(referrerId) !== tgUser.id) ? Number(referrerId) : null;
     userData = {
       id: tgUser.id,
@@ -149,6 +172,7 @@ export async function syncUserFirestore(
       is_banned: false,
       ban_reason: '',
       banned_at: '',
+      has_started_bot: true,
       current_ip: clientIp,
       device_id: deviceId,
       ip_history: clientIp !== 'unknown' ? [clientIp] : [],

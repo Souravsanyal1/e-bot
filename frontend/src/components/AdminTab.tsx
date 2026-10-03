@@ -1955,7 +1955,14 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     userList.map((u) => (
                       <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="py-3 px-4">
-                          <div className="font-bold text-white">{u.first_name || 'Anonymous'}</div>
+                          <div className="font-bold text-white flex items-center gap-1.5 flex-wrap">
+                            <span>{u.first_name || 'Anonymous'}</span>
+                            {u.has_started_bot && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 font-mono">
+                                /start ✓
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[11px] text-gray-400">@{u.username || 'no-handle'}</div>
                         </td>
                         <td className="py-3 px-4 font-mono text-gray-300">{u.id}</td>

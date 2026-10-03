@@ -13,6 +13,7 @@ export interface User {
   current_ip?: string;
   ip_history?: string[];
   device_id?: string;
+  has_started_bot?: boolean;
 }
 
 export interface MiningState {
