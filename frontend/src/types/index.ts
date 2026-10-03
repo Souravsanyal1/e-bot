@@ -10,6 +10,9 @@ export interface User {
   is_banned?: boolean;
   ban_reason?: string;
   banned_at?: string;
+  current_ip?: string;
+  ip_history?: string[];
+  device_id?: string;
 }
 
 export interface MiningState {

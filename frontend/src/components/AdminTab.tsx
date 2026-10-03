@@ -5,7 +5,8 @@ import {
   ArrowLeft, CheckCircle2, AlertTriangle, Radio, 
   ExternalLink, Ban, Sparkles, MessageSquare,
   Sliders, Wallet, Copy, Check, XCircle, Clock,
-  Eye, EyeOff, Cpu, Play, TrendingUp, Gauge
+  Eye, EyeOff, Cpu, Play, TrendingUp, Gauge,
+  ShieldCheck, Network, Smartphone, Lock
 } from 'lucide-react';
 import { 
   getAdminStatsFirestore, 
@@ -107,6 +108,16 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
   const [savingMiningSettings, setSavingMiningSettings] = useState(false);
   const [miningSettingsSaved, setMiningSettingsSaved] = useState(false);
 
+  // Anti-Cheat Multi-Account & Multi-IP Security Settings
+  const [antiCheatEnabled, setAntiCheatEnabled] = useState(true);
+  const [autoBanMultiAccount, setAutoBanMultiAccount] = useState(true);
+  const [autoBanMultiIp, setAutoBanMultiIp] = useState(true);
+  const [maxAccountsPerDevice, setMaxAccountsPerDevice] = useState(1);
+  const [maxAccountsPerIp, setMaxAccountsPerIp] = useState(2);
+  const [maxIpsPerAccount, setMaxIpsPerAccount] = useState(4);
+  const [savingAntiCheat, setSavingAntiCheat] = useState(false);
+  const [antiCheatSaved, setAntiCheatSaved] = useState(false);
+
   // Clear All User Data state
   const [clearingData, setClearingData] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
@@ -143,10 +154,41 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
       setReferralSpeedBoost(appSettings.referral_speed_boost !== undefined ? appSettings.referral_speed_boost : 0.05);
       setReferralCoinBonus(appSettings.referral_coin_bonus !== undefined ? appSettings.referral_coin_bonus : 10.0);
       setSessionDurationHours(appSettings.session_duration_hours !== undefined ? appSettings.session_duration_hours : 24);
+
+      setAntiCheatEnabled(appSettings.anti_cheat_enabled !== false);
+      setAutoBanMultiAccount(appSettings.auto_ban_multi_account !== false);
+      setAutoBanMultiIp(appSettings.auto_ban_multi_ip !== false);
+      setMaxAccountsPerDevice(appSettings.max_accounts_per_device !== undefined ? appSettings.max_accounts_per_device : 1);
+      setMaxAccountsPerIp(appSettings.max_accounts_per_ip !== undefined ? appSettings.max_accounts_per_ip : 2);
+      setMaxIpsPerAccount(appSettings.max_ips_per_account !== undefined ? appSettings.max_ips_per_account : 4);
     } catch (err: any) {
       console.warn('Admin load error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveAntiCheat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingAntiCheat(true);
+    try {
+      await updateAppSettings({
+        anti_cheat_enabled: antiCheatEnabled,
+        auto_ban_multi_account: autoBanMultiAccount,
+        auto_ban_multi_ip: autoBanMultiIp,
+        max_accounts_per_device: Number(maxAccountsPerDevice),
+        max_accounts_per_ip: Number(maxAccountsPerIp),
+        max_ips_per_account: Number(maxIpsPerAccount)
+      });
+      setAntiCheatSaved(true);
+      if (onSettingsUpdated) {
+        onSettingsUpdated(await getAppSettings());
+      }
+      setTimeout(() => setAntiCheatSaved(false), 3000);
+    } catch (err: any) {
+      alert('Error saving anti-cheat settings: ' + err.message);
+    } finally {
+      setSavingAntiCheat(false);
     }
   };
 
@@ -990,6 +1032,182 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
               </div>
             </div>
 
+            {/* Anti-Cheat & Multi-Account / Multi-IP Security Firewall Panel */}
+            <div className="glass-panel p-6 rounded-2xl border border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.15)] mt-6 bg-gradient-to-b from-red-500/5 via-transparent to-transparent">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <ShieldCheck size={19} className="text-red-500" />
+                    <span>Anti-Cheat & Multi-Account / Multi-IP Firewall</span>
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Automatically detect, prevent, and ban users operating multiple Telegram accounts on the same device/IP or rotating proxies.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 ${
+                    antiCheatEnabled
+                      ? 'bg-red-500/15 text-red-300 border border-red-500/30'
+                      : 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/30'
+                  }`}>
+                    <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+                    <span>{antiCheatEnabled ? 'Anti-Cheat Auto-Ban ACTIVE' : 'Anti-Cheat PAUSED'}</span>
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveAntiCheat} className="space-y-4">
+                {/* Master Switch */}
+                <div className="p-3.5 rounded-xl bg-black/40 border border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-red-500/15 text-red-400">
+                      <ShieldAlert size={20} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-white block">Master Anti-Cheat Defense System</span>
+                      <span className="text-[11px] text-gray-400 block">
+                        When enabled, all incoming connections are verified against device & IP registry to stop multi-account bot farms.
+                      </span>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={antiCheatEnabled}
+                      onChange={(e) => setAntiCheatEnabled(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Rule 1: Device Multi-Accounting */}
+                  <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                        <Smartphone size={15} className="text-orange-400" />
+                        <span>Same Device Multi-Account</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={autoBanMultiAccount}
+                        onChange={(e) => setAutoBanMultiAccount(e.target.checked)}
+                        className="w-4 h-4 rounded border-white/20 accent-red-500 cursor-pointer"
+                        title="Auto-ban if device limit exceeded"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-400">
+                      Bans user if multiple Telegram accounts operate from the same physical browser or device.
+                    </p>
+                    <div>
+                      <label className="text-[11px] text-gray-300 font-semibold block mb-1">
+                        Max Allowed Accounts per Device:
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="5"
+                        value={maxAccountsPerDevice}
+                        onChange={(e) => setMaxAccountsPerDevice(parseInt(e.target.value) || 1)}
+                        className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-mono font-bold focus:outline-none focus:border-red-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Rule 2: IP Multi-Accounting */}
+                  <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                        <Network size={15} className="text-yellow-400" />
+                        <span>Same IP Multi-Account</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={autoBanMultiAccount}
+                        onChange={(e) => setAutoBanMultiAccount(e.target.checked)}
+                        className="w-4 h-4 rounded border-white/20 accent-red-500 cursor-pointer"
+                        title="Auto-ban if IP account limit exceeded"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-400">
+                      Bans accounts if too many Telegram users access or farm referrals from the identical IP address.
+                    </p>
+                    <div>
+                      <label className="text-[11px] text-gray-300 font-semibold block mb-1">
+                        Max Allowed Accounts per IP:
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={maxAccountsPerIp}
+                        onChange={(e) => setMaxAccountsPerIp(parseInt(e.target.value) || 2)}
+                        className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-mono font-bold focus:outline-none focus:border-red-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Rule 3: Multiple IP Hopping / Proxy Abuse */}
+                  <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                        <Lock size={15} className="text-cyan-400" />
+                        <span>Multiple IP Hopping / VPN</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={autoBanMultiIp}
+                        onChange={(e) => setAutoBanMultiIp(e.target.checked)}
+                        className="w-4 h-4 rounded border-white/20 accent-red-500 cursor-pointer"
+                        title="Auto-ban if single user changes IP too many times"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-400">
+                      Bans a single user account if they rapidly hop across multiple distinct IPs or rotating proxies.
+                    </p>
+                    <div>
+                      <label className="text-[11px] text-gray-300 font-semibold block mb-1">
+                        Max Distinct IPs per User:
+                      </label>
+                      <input
+                        type="number"
+                        min="2"
+                        max="20"
+                        value={maxIpsPerAccount}
+                        onChange={(e) => setMaxIpsPerAccount(parseInt(e.target.value) || 4)}
+                        className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-mono font-bold focus:outline-none focus:border-red-500"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={savingAntiCheat}
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-black text-xs tracking-wider uppercase shadow-[0_0_20px_rgba(239,68,68,0.3)] hover:brightness-110 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    {savingAntiCheat ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={16} />
+                    )}
+                    <span>Save Anti-Cheat Security Rules</span>
+                  </button>
+
+                  {antiCheatSaved && (
+                    <span className="text-xs font-bold text-green-400 flex items-center gap-1.5 animate-pulse">
+                      <CheckCircle2 size={15} /> Anti-Cheat Rules Live in Firestore!
+                    </span>
+                  )}
+                </div>
+              </form>
+            </div>
+
             {/* Ad Monetization & Monetag Configuration Panel */}
             <div className="glass-panel p-6 rounded-2xl border border-white/10 mt-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
@@ -1720,6 +1938,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     <th className="py-3 px-4">Telegram ID</th>
                     <th className="py-3 px-4">Balance</th>
                     <th className="py-3 px-4">Speed Rate</th>
+                    <th className="py-3 px-4">Network / Device</th>
                     <th className="py-3 px-4">Invited</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4 text-right">Actions</th>
@@ -1728,7 +1947,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                 <tbody className="divide-y divide-white/5 text-xs">
                   {userList.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-gray-400">
+                      <td colSpan={8} className="py-8 text-center text-gray-400">
                         No miners found in Cloud Firestore.
                       </td>
                     </tr>
@@ -1746,13 +1965,29 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                         <td className="py-3 px-4 font-mono text-orange-300">
                           +{Number(u.speed_per_hr || 0.5).toFixed(2)}/hr
                         </td>
+                        <td className="py-3 px-4 font-mono text-[11px]">
+                          <div className="text-gray-300 flex items-center gap-1">
+                            <span className="text-[10px] text-gray-500">IP:</span>
+                            <span>{u.current_ip || '—'}</span>
+                          </div>
+                          <div className="text-gray-500 text-[10px]">
+                            {u.ip_history ? `${u.ip_history.length} IPs used` : '1 IP logged'}
+                          </div>
+                        </td>
                         <td className="py-3 px-4 font-mono text-purple-300">
                           {u.referral_count || 0} friends
                         </td>
                         <td className="py-3 px-4">
                           {u.is_banned ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">
-                              BANNED
+                            <span 
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 cursor-help"
+                              title={u.ban_reason || 'Banned by Administration'}
+                            >
+                              {u.ban_reason && u.ban_reason.includes('Multi-accounting')
+                                ? 'BANNED (MULTI-ACC)'
+                                : u.ban_reason && u.ban_reason.includes('Multiple IP')
+                                ? 'BANNED (MULTI-IP)'
+                                : 'BANNED'}
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">

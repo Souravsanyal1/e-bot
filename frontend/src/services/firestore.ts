@@ -66,7 +66,48 @@ export function calculateMining(session: any, userSpeed: number = BASE_MINING_RA
   };
 }
 
-// 1. Sync / Initialize User in Cloud Firestore
+// ==========================================
+// ANTI-CHEAT & CLIENT FOOTPRINT HELPERS
+// ==========================================
+
+let cachedClientIp: string | null = null;
+
+export async function getClientIp(): Promise<string> {
+  if (cachedClientIp) return cachedClientIp;
+  try {
+    const res = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(3000) });
+    const data = await res.json();
+    if (data.ip) {
+      cachedClientIp = String(data.ip).trim();
+      return cachedClientIp;
+    }
+  } catch {
+    try {
+      const res = await fetch('https://api64.ipify.org?format=json', { signal: AbortSignal.timeout(3000) });
+      const data = await res.json();
+      if (data.ip) {
+        cachedClientIp = String(data.ip).trim();
+        return cachedClientIp;
+      }
+    } catch {}
+  }
+  return 'unknown';
+}
+
+export function getDeviceId(): string {
+  try {
+    let id = localStorage.getItem('eforce_device_uid');
+    if (!id || id.length < 8) {
+      id = 'dev_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      localStorage.setItem('eforce_device_uid', id);
+    }
+    return id;
+  } catch {
+    return 'dev_unknown';
+  }
+}
+
+// 1. Sync / Initialize User in Cloud Firestore with Anti-Cheat Security Audit
 export async function syncUserFirestore(
   tgUser: { id: number; username?: string; first_name?: string; last_name?: string },
   referrerId?: number
@@ -75,9 +116,22 @@ export async function syncUserFirestore(
   const userRef = doc(db, 'users', userIdStr);
   const userSnap = await getDoc(userRef);
   const settings = await getAppSettings();
+
   const configuredBaseRate = settings.base_mining_rate || BASE_MINING_RATE;
   const configuredRefBoost = settings.referral_speed_boost || REFERRAL_SPEED_BOOST;
   const configuredRefBonus = settings.referral_coin_bonus || REFERRAL_COIN_BONUS;
+
+  // Anti-Cheat Parameters
+  const antiCheatActive = settings.anti_cheat_enabled !== false;
+  const autoBanMultiAccount = settings.auto_ban_multi_account !== false;
+  const autoBanMultiIp = settings.auto_ban_multi_ip !== false;
+  const maxAccountsPerDevice = settings.max_accounts_per_device !== undefined ? Number(settings.max_accounts_per_device) : 1;
+  const maxAccountsPerIp = settings.max_accounts_per_ip !== undefined ? Number(settings.max_accounts_per_ip) : 2;
+  const maxIpsPerAccount = settings.max_ips_per_account !== undefined ? Number(settings.max_ips_per_account) : 4;
+
+  // Retrieve Client Footprint
+  const clientIp = await getClientIp().catch(() => 'unknown');
+  const deviceId = getDeviceId();
 
   let userData: any;
 
@@ -93,6 +147,11 @@ export async function syncUserFirestore(
       referral_count: 0,
       referred_by: validRef,
       is_banned: false,
+      ban_reason: '',
+      banned_at: '',
+      current_ip: clientIp,
+      device_id: deviceId,
+      ip_history: clientIp !== 'unknown' ? [clientIp] : [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -149,6 +208,104 @@ export async function syncUserFirestore(
     }
   }
 
+  // ==========================================
+  // ANTI-CHEAT MULTI-ACCOUNT & MULTI-IP AUDIT
+  // ==========================================
+  let isBanned = Boolean(userData.is_banned);
+  let banReason = userData.ban_reason || '';
+  let bannedAt = userData.banned_at || '';
+  const currentHistory: string[] = Array.isArray(userData.ip_history) ? [...userData.ip_history] : [];
+
+  if (clientIp && clientIp !== 'unknown' && !currentHistory.includes(clientIp)) {
+    currentHistory.push(clientIp);
+  }
+
+  if (!isBanned && antiCheatActive) {
+    // 1) DEVICE MULTI-ACCOUNT DETECTION
+    if (deviceId && deviceId !== 'dev_unknown') {
+      try {
+        const deviceRef = doc(db, 'security_devices', deviceId);
+        const deviceSnap = await getDoc(deviceRef);
+        let linkedUsers: number[] = [];
+        if (deviceSnap.exists()) {
+          linkedUsers = Array.isArray(deviceSnap.data().user_ids) ? [...deviceSnap.data().user_ids] : [];
+        }
+        if (!linkedUsers.includes(tgUser.id)) {
+          linkedUsers.push(tgUser.id);
+        }
+
+        // If multiple distinct accounts use this exact physical device
+        if (autoBanMultiAccount && linkedUsers.length > maxAccountsPerDevice) {
+          isBanned = true;
+          banReason = `Anti-Cheat: Multi-accounting detected. Multiple accounts (${linkedUsers.length}) operating on the same device.`;
+          bannedAt = new Date().toISOString();
+        }
+
+        await setDoc(deviceRef, {
+          device_id: deviceId,
+          user_ids: linkedUsers,
+          accounts_count: linkedUsers.length,
+          last_user_id: tgUser.id,
+          last_seen: new Date().toISOString()
+        }, { merge: true });
+      } catch (devErr) {
+        console.warn('Device security audit error:', devErr);
+      }
+    }
+
+    // 2) IP MULTI-ACCOUNT DETECTION (Farming multiple accounts on same IP)
+    if (!isBanned && clientIp && clientIp !== 'unknown') {
+      try {
+        const sanitizedIp = clientIp.replace(/[:.]/g, '_');
+        const ipRef = doc(db, 'security_ips', sanitizedIp);
+        const ipSnap = await getDoc(ipRef);
+        let ipUsers: number[] = [];
+        if (ipSnap.exists()) {
+          ipUsers = Array.isArray(ipSnap.data().user_ids) ? [...ipSnap.data().user_ids] : [];
+        }
+        if (!ipUsers.includes(tgUser.id)) {
+          ipUsers.push(tgUser.id);
+        }
+
+        if (autoBanMultiAccount && ipUsers.length > maxAccountsPerIp) {
+          isBanned = true;
+          banReason = `Anti-Cheat: Multi-accounting detected. Too many accounts (${ipUsers.length}) operating from the same IP address (${clientIp}).`;
+          bannedAt = new Date().toISOString();
+        }
+
+        await setDoc(ipRef, {
+          ip: clientIp,
+          user_ids: ipUsers,
+          accounts_count: ipUsers.length,
+          last_user_id: tgUser.id,
+          last_seen: new Date().toISOString()
+        }, { merge: true });
+      } catch (ipErr) {
+        console.warn('IP security audit error:', ipErr);
+      }
+    }
+
+    // 3) MULTIPLE IP HOPPING / VPN PROXY ROTATION DETECTION
+    if (!isBanned && autoBanMultiIp && clientIp && clientIp !== 'unknown') {
+      if (currentHistory.length > maxIpsPerAccount) {
+        isBanned = true;
+        banReason = `Anti-Cheat: Multiple IP addresses detected (${currentHistory.length} IPs used). Suspicious VPN/Proxy rotation prohibited.`;
+        bannedAt = new Date().toISOString();
+      }
+    }
+  }
+
+  // Update audit trail on user document
+  await setDoc(userRef, {
+    current_ip: clientIp,
+    device_id: deviceId,
+    ip_history: currentHistory,
+    is_banned: isBanned,
+    ban_reason: banReason,
+    banned_at: bannedAt,
+    updated_at: new Date().toISOString()
+  }, { merge: true });
+
   // Get current active mining session
   const sessionRef = doc(db, 'mining_sessions', userIdStr);
   const sessionSnap = await getDoc(sessionRef);
@@ -167,9 +324,12 @@ export async function syncUserFirestore(
       referral_count: Number(userData.referral_count || 0),
       is_admin: false,
       photo_url: userData.photo_url || undefined,
-      is_banned: Boolean(userData.is_banned),
-      ban_reason: userData.ban_reason || '',
-      banned_at: userData.banned_at || ''
+      is_banned: isBanned,
+      ban_reason: banReason,
+      banned_at: bannedAt,
+      current_ip: clientIp,
+      device_id: deviceId,
+      ip_history: currentHistory
     },
     mining: miningState
   };
@@ -708,6 +868,14 @@ export interface AppSettings {
   referral_speed_boost?: number;
   referral_coin_bonus?: number;
   session_duration_hours?: number;
+
+  // Anti-Cheat & Security Firewall Settings
+  anti_cheat_enabled?: boolean;
+  auto_ban_multi_account?: boolean;
+  auto_ban_multi_ip?: boolean;
+  max_accounts_per_device?: number;
+  max_accounts_per_ip?: number;
+  max_ips_per_account?: number;
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
@@ -732,7 +900,15 @@ export async function getAppSettings(): Promise<AppSettings> {
         base_mining_rate: data.base_mining_rate !== undefined ? Number(data.base_mining_rate) : 0.5,
         referral_speed_boost: data.referral_speed_boost !== undefined ? Number(data.referral_speed_boost) : 0.05,
         referral_coin_bonus: data.referral_coin_bonus !== undefined ? Number(data.referral_coin_bonus) : 10.0,
-        session_duration_hours: data.session_duration_hours !== undefined ? Number(data.session_duration_hours) : 24
+        session_duration_hours: data.session_duration_hours !== undefined ? Number(data.session_duration_hours) : 24,
+
+        // Anti-Cheat parameters
+        anti_cheat_enabled: data.anti_cheat_enabled !== false,
+        auto_ban_multi_account: data.auto_ban_multi_account !== false,
+        auto_ban_multi_ip: data.auto_ban_multi_ip !== false,
+        max_accounts_per_device: data.max_accounts_per_device !== undefined ? Number(data.max_accounts_per_device) : 1,
+        max_accounts_per_ip: data.max_accounts_per_ip !== undefined ? Number(data.max_accounts_per_ip) : 2,
+        max_ips_per_account: data.max_ips_per_account !== undefined ? Number(data.max_ips_per_account) : 4
       };
     }
   } catch (e) {
@@ -755,6 +931,13 @@ export async function getAppSettings(): Promise<AppSettings> {
   const localRefBonus = localStorage.getItem('eforce_ref_bonus') ? Number(localStorage.getItem('eforce_ref_bonus')) : 10.0;
   const localDuration = localStorage.getItem('eforce_session_hours') ? Number(localStorage.getItem('eforce_session_hours')) : 24;
 
+  const localAntiCheat = localStorage.getItem('eforce_anti_cheat') !== 'false';
+  const localAutoBanMulti = localStorage.getItem('eforce_auto_ban_multi') !== 'false';
+  const localAutoBanIp = localStorage.getItem('eforce_auto_ban_ip') !== 'false';
+  const localMaxDev = localStorage.getItem('eforce_max_dev') ? Number(localStorage.getItem('eforce_max_dev')) : 1;
+  const localMaxIp = localStorage.getItem('eforce_max_ip') ? Number(localStorage.getItem('eforce_max_ip')) : 2;
+  const localMaxIpsAcc = localStorage.getItem('eforce_max_ips_acc') ? Number(localStorage.getItem('eforce_max_ips_acc')) : 4;
+
   return {
     monetag_zone_id: localMonetagZone,
     monetag_enabled: localMonetagEnabled,
@@ -771,7 +954,14 @@ export async function getAppSettings(): Promise<AppSettings> {
     base_mining_rate: localBaseRate,
     referral_speed_boost: localRefBoost,
     referral_coin_bonus: localRefBonus,
-    session_duration_hours: localDuration
+    session_duration_hours: localDuration,
+
+    anti_cheat_enabled: localAntiCheat,
+    auto_ban_multi_account: localAutoBanMulti,
+    auto_ban_multi_ip: localAutoBanIp,
+    max_accounts_per_device: localMaxDev,
+    max_accounts_per_ip: localMaxIp,
+    max_ips_per_account: localMaxIpsAcc
   };
 }
 
@@ -785,6 +975,13 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
     if (settings.referral_speed_boost !== undefined) localStorage.setItem('eforce_ref_boost', String(settings.referral_speed_boost));
     if (settings.referral_coin_bonus !== undefined) localStorage.setItem('eforce_ref_bonus', String(settings.referral_coin_bonus));
     if (settings.session_duration_hours !== undefined) localStorage.setItem('eforce_session_hours', String(settings.session_duration_hours));
+
+    if (settings.anti_cheat_enabled !== undefined) localStorage.setItem('eforce_anti_cheat', String(settings.anti_cheat_enabled));
+    if (settings.auto_ban_multi_account !== undefined) localStorage.setItem('eforce_auto_ban_multi', String(settings.auto_ban_multi_account));
+    if (settings.auto_ban_multi_ip !== undefined) localStorage.setItem('eforce_auto_ban_ip', String(settings.auto_ban_multi_ip));
+    if (settings.max_accounts_per_device !== undefined) localStorage.setItem('eforce_max_dev', String(settings.max_accounts_per_device));
+    if (settings.max_accounts_per_ip !== undefined) localStorage.setItem('eforce_max_ip', String(settings.max_accounts_per_ip));
+    if (settings.max_ips_per_account !== undefined) localStorage.setItem('eforce_max_ips_acc', String(settings.max_ips_per_account));
   } catch (e) {
     console.warn('Failed to save settings to firestore:', e);
   }
