@@ -10,6 +10,7 @@ import { FriendsTab } from './components/FriendsTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
 import { AdminTab } from './components/AdminTab';
 import { AdminLogin } from './components/AdminLogin';
+import { BannedPage } from './components/BannedPage';
 import { 
   syncUserFirestore, 
   startMiningFirestore, 
@@ -116,7 +117,14 @@ export const App: React.FC = () => {
 
       // 2. Real-time Firestore balance & speed subscription
       subscribeToUserFirestore(tgUser.id, (freshUser) => {
-        setUser(prev => prev ? { ...prev, balance: freshUser.balance, speed_per_hr: freshUser.speed_per_hr } : freshUser);
+        setUser(prev => prev ? { 
+          ...prev, 
+          balance: freshUser.balance, 
+          speed_per_hr: freshUser.speed_per_hr,
+          is_banned: freshUser.is_banned,
+          ban_reason: freshUser.ban_reason,
+          banned_at: freshUser.banned_at
+        } : freshUser);
       });
     } catch (e: any) {
       console.warn('Firestore primary sync fallback:', e);
@@ -247,6 +255,16 @@ export const App: React.FC = () => {
           setAdminAuthenticated(false);
           setAdminEmail('');
         }}
+      />
+    );
+  }
+
+  // Intercept and show Banned Page if user is banned by Admin
+  if (user?.is_banned) {
+    return (
+      <BannedPage 
+        user={user} 
+        onRefresh={() => syncUserData()} 
       />
     );
   }

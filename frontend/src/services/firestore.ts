@@ -166,7 +166,10 @@ export async function syncUserFirestore(
       speed_per_hr: Number(userData.speed_per_hr || BASE_MINING_RATE),
       referral_count: Number(userData.referral_count || 0),
       is_admin: false,
-      photo_url: userData.photo_url || undefined
+      photo_url: userData.photo_url || undefined,
+      is_banned: Boolean(userData.is_banned),
+      ban_reason: userData.ban_reason || '',
+      banned_at: userData.banned_at || ''
     },
     mining: miningState
   };
@@ -479,7 +482,11 @@ export function subscribeToUserFirestore(userId: number, callback: (user: User) 
         balance: Number(data.balance || 0),
         speed_per_hr: Number(data.speed_per_hr || BASE_MINING_RATE),
         referral_count: Number(data.referral_count || 0),
-        is_admin: false
+        is_admin: false,
+        photo_url: data.photo_url || undefined,
+        is_banned: Boolean(data.is_banned),
+        ban_reason: data.ban_reason || '',
+        banned_at: data.banned_at || ''
       });
     }
   });
@@ -567,10 +574,12 @@ export async function getAdminUsersFirestore(search?: string) {
 }
 
 // Ban or unban user in Firestore
-export async function adminBanUserFirestore(userId: number, ban: boolean) {
+export async function adminBanUserFirestore(userId: number, ban: boolean, reason?: string) {
   const userRef = doc(db, 'users', String(userId));
   await setDoc(userRef, {
     is_banned: ban,
+    ban_reason: ban ? (reason || 'Violating platform fair-use policy or terms of service.') : null,
+    banned_at: ban ? new Date().toISOString() : null,
     updated_at: new Date().toISOString()
   }, { merge: true });
 }

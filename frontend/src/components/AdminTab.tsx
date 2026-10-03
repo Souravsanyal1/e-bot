@@ -482,10 +482,17 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
   };
 
   const handleToggleBan = async (user: any) => {
-    const action = user.is_banned ? 'Unban' : 'Ban';
-    if (!confirm(`Are you sure you want to ${action} user ${user.first_name || user.id}?`)) return;
+    let banReason = '';
+    if (!user.is_banned) {
+      const input = prompt(`Enter Ban Reason for user ${user.first_name || user.id} (or click OK for default):`, 'Violation of fair-play terms or suspicious automated activity.');
+      if (input === null) return; // Admin cancelled prompt
+      banReason = input.trim() || 'Violation of fair-play terms or suspicious automated activity.';
+    } else {
+      if (!confirm(`Are you sure you want to Unban user ${user.first_name || user.id}?`)) return;
+    }
+
     try {
-      await adminBanUserFirestore(user.id, !user.is_banned);
+      await adminBanUserFirestore(user.id, !user.is_banned, banReason);
       const updated = await getAdminUsersFirestore(searchQuery);
       setUserList(updated);
     } catch (err: any) {
