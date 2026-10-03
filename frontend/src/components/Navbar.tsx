@@ -30,9 +30,9 @@ export const Navbar: React.FC<NavbarProps> = ({ user, activeSpeed }) => {
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-sm tracking-wide text-white">E-FORCE</span>
             </div>
-            <div className="text-[11px] text-gray-400 flex items-center gap-1.5 truncate">
-              <span className="truncate max-w-[120px] text-gray-300 font-medium">{user?.first_name || 'Miner'}</span>
-              {user?.username && <span className="text-gray-500 shrink-0">@{user.username}</span>}
+            <div className="text-[11px] text-gray-400 flex items-center gap-1.5 min-w-0">
+              <span className="truncate max-w-[105px] text-gray-300 font-medium">{user?.first_name || 'Miner'}</span>
+              {user?.username && <span className="text-gray-500 truncate max-w-[95px] shrink">@{user.username}</span>}
             </div>
           </div>
         </div>

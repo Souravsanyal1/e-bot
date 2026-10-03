@@ -214,47 +214,49 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
   return (
     <div className="w-full pb-24 px-4 space-y-5 animate-fade-in">
       {/* Top Header Card */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#12131F] to-[#0A0A10] border border-orange-500/20 p-5 shadow-2xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#12131F] to-[#0A0A10] border border-orange-500/20 p-4 sm:p-5 shadow-2xl">
         <div className="absolute top-0 right-0 w-36 h-36 bg-brand-orange/10 rounded-full blur-2xl pointer-events-none" />
         
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-orange to-amber-500 p-0.5 flex items-center justify-center shadow-[0_0_15px_rgba(255,102,0,0.3)]">
+        {/* Title Header */}
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-orange to-amber-500 p-0.5 flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(255,102,0,0.3)]">
               <div className="w-full h-full bg-[#0C0D14] rounded-[10px] flex items-center justify-center">
                 <Wallet size={20} className="text-brand-orange" />
               </div>
             </div>
-            <div>
-              <h2 className="text-lg font-black text-white tracking-tight flex items-center gap-1.5">
-                WITHDRAWAL
-                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base sm:text-lg font-black text-white tracking-tight">WITHDRAWAL</h2>
+                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
                   BEP20
                 </span>
-              </h2>
-              <p className="text-[11px] text-gray-400">Direct payout to BNB Smart Chain</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Available</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-xl font-black font-mono text-white">
-                {(user?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <span className="text-xs font-bold text-brand-orange">E-FORCE</span>
+              </div>
+              <p className="text-[11px] text-gray-400 truncate">Direct payout to BNB Smart Chain</p>
             </div>
           </div>
         </div>
 
-        {/* Network & Fee Highlights */}
-        <div className="grid grid-cols-2 gap-2 text-xs pt-3 border-t border-white/5">
-          <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/5">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-gray-300">Fee: <strong className="text-amber-400">{feePercent}%</strong></span>
+        {/* Dedicated Available Balance Bar */}
+        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.04] border border-white/10 mb-3">
+          <span className="text-xs text-gray-400 font-medium">Available Balance</span>
+          <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+            <span className="text-lg sm:text-xl font-black font-mono text-white">
+              {(user?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            <span className="text-xs font-black text-brand-orange">E-FORCE</span>
           </div>
-          <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/5">
-            <ArrowDownToLine size={13} className="text-brand-orange" />
-            <span className="text-gray-300">Min: <strong className="text-white">{minAmount} E-FORCE</strong></span>
+        </div>
+
+        {/* Network & Fee Highlights */}
+        <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-white/5">
+          <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/5 min-w-0">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span className="text-gray-300 truncate">Fee: <strong className="text-amber-400">{feePercent}%</strong></span>
+          </div>
+          <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/5 min-w-0">
+            <ArrowDownToLine size={13} className="text-brand-orange shrink-0" />
+            <span className="text-gray-300 truncate">Min: <strong className="text-white">{minAmount} E-FORCE</strong></span>
           </div>
         </div>
 
