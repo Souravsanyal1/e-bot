@@ -54,8 +54,10 @@ export interface Task {
 }
 
 export interface ReferralFriend {
+  id: number;
   name: string;
   username: string;
+  photo_url?: string;
   joined_at: string;
   bonus_coins: number;
   speed_boost: number;

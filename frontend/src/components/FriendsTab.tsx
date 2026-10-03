@@ -1,9 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Copy, Check, Share2, Zap, Gift, Sparkles, UserPlus } from 'lucide-react';
-import type { ReferralData } from '../types';
+import type { ReferralData, ReferralFriend } from '../types';
 import type { AppSettings } from '../services/firestore';
+import { getTelegramUserPhoto } from '../services/firestore';
 import { tg } from '../services/telegram';
+
+const FriendAvatar: React.FC<{ friend: ReferralFriend }> = ({ friend }) => {
+  const [imgSrc, setImgSrc] = useState<string | null>(friend.photo_url || null);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    if (friend.photo_url) {
+      setImgSrc(friend.photo_url);
+      return;
+    }
+
+    if (friend.id) {
+      const cached = localStorage.getItem(`tg_photo_${friend.id}`);
+      if (cached) {
+        setImgSrc(cached);
+        return;
+      }
+
+      getTelegramUserPhoto(friend.id)
+        .then((url) => {
+          if (url) {
+            localStorage.setItem(`tg_photo_${friend.id}`, url);
+            setImgSrc(url);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [friend.id, friend.photo_url]);
+
+  const fallbackUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(friend.name || String(friend.id || 'friend'))}&backgroundColor=181824`;
+
+  return (
+    <div className="w-9 h-9 rounded-full p-[1.5px] bg-gradient-to-tr from-brand-orange via-amber-400 to-orange-500 shrink-0 shadow-[0_0_8px_rgba(255,102,0,0.25)] flex items-center justify-center">
+      <img
+        src={!imgError && imgSrc ? imgSrc : fallbackUrl}
+        alt={friend.name}
+        onError={() => setImgError(true)}
+        className="w-full h-full object-cover rounded-full select-none bg-[#181824]"
+        loading="lazy"
+      />
+    </div>
+  );
+};
 
 interface FriendsTabProps {
   referrals: ReferralData | null;
@@ -184,9 +228,7 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals, appSettings }
                 className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-orange to-amber-400 flex items-center justify-center text-black font-extrabold text-xs">
-                    {friend.name.charAt(0).toUpperCase()}
-                  </div>
+                  <FriendAvatar friend={friend} />
                   <div>
                     <div className="text-xs font-bold text-white">{friend.name}</div>
                     <div className="text-[10px] text-gray-400">

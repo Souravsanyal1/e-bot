@@ -229,6 +229,7 @@ export async function processReferralReward(
       referred_id: referredIdNum,
       referred_name: referredUser.first_name || 'Miner',
       referred_username: referredUser.username || '',
+      photo_url: (referredUser as any).photo_url || '',
       bonus_coins: configuredRefBonus,
       speed_boost: configuredRefBoost,
       created_at: new Date().toISOString()
@@ -777,17 +778,36 @@ export async function getReferralsFirestore(userId: number): Promise<ReferralDat
     return true;
   });
 
-  const friends = combinedDocs.map(d => {
+  const friends = await Promise.all(combinedDocs.map(async (d) => {
     const data = d.data();
+    let photoUrl = data.photo_url || undefined;
+    const referredId = Number(data.referred_id);
+
+    // If photo_url is not saved on the referral record, look up the referred user's doc
+    if (!photoUrl && referredId) {
+      try {
+        const uSnap = await getDoc(doc(db, 'users', String(referredId)));
+        if (uSnap.exists()) {
+          const uData = uSnap.data();
+          if (uData.photo_url) {
+            photoUrl = uData.photo_url;
+            setDoc(d.ref, { photo_url: photoUrl }, { merge: true }).catch(() => {});
+          }
+        }
+      } catch (_) {}
+    }
+
     const name = data.referred_name || (data.referred_username ? `@${data.referred_username}` : `Miner #${data.referred_id}`);
     return {
+      id: referredId,
       name,
       username: data.referred_username || '',
+      photo_url: photoUrl,
       joined_at: data.created_at,
       bonus_coins: Number(data.bonus_coins || refBonus),
       speed_boost: Number(data.speed_boost || refBoost)
     };
-  });
+  }));
 
   const totalInvited = Math.max(Number(userData.referral_count || 0), friends.length);
   const totalBoostEarned = Number((totalInvited * refBoost).toFixed(2));
