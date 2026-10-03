@@ -66,6 +66,18 @@ export async function completeTask(userId, taskId) {
   // Update Redis cache
   await cache.updateScore('leaderboard:miners', String(userId), updatedBalance);
 
+  // Send Telegram DM notification
+  try {
+    const { sendTaskCompletedNotification } = await import('./notifications.js');
+    await sendTaskCompletedNotification(userId, {
+      taskTitle: task.title,
+      rewardCoins,
+      speedBoost,
+      newBalance: updatedBalance,
+      newSpeed: updatedSpeed
+    });
+  } catch (_nErr) {}
+
   return {
     rewardCoins,
     speedBoost,

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     speed_per_hr NUMERIC(10, 4) DEFAULT 0.5000,
     mining_start_time TIMESTAMP WITH TIME ZONE NULL,
     last_claim_time TIMESTAMP WITH TIME ZONE NULL,
+    last_mining_notified_time TIMESTAMP WITH TIME ZONE NULL,
     referred_by BIGINT NULL,
     referral_count INT DEFAULT 0,
     is_banned BOOLEAN DEFAULT FALSE,

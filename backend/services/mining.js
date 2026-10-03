@@ -89,12 +89,22 @@ export async function claimMiningSession(userId) {
     UPDATE users 
     SET balance = $1, 
         last_claim_time = $2, 
-        mining_start_time = $3 
+        mining_start_time = $3,
+        last_mining_notified_time = NULL
     WHERE id = $4
   `, [newBalance, nowIso, nowIso, userId]);
 
   // Update Redis Leaderboard score
   await cache.updateScore('leaderboard:miners', String(userId), newBalance);
+
+  // Send Telegram DM notification
+  try {
+    const { sendMiningClaimedNotification } = await import('./notifications.js');
+    await sendMiningClaimedNotification(userId, {
+      claimedAmount: claimAmount,
+      newBalance: newBalance
+    });
+  } catch (_nErr) {}
 
   const updatedUser = await db.get('SELECT * FROM users WHERE id = $1', [userId]);
   return {

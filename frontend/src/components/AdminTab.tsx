@@ -26,6 +26,7 @@ import {
   executeAutoTokenPayout, 
   NETWORKS 
 } from '../services/blockchain';
+import { api } from '../services/api';
 import type { AdminStats, Task, WithdrawalRequest } from '../types';
 
 interface AdminTabProps {
@@ -261,6 +262,18 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
 
       // Mark completed in firestore with real Tx Hash
       await adminUpdateWithdrawalStatusFirestore(wd.id, 'completed', `Auto-paid on-chain: ${res.txHash}`);
+      
+      // Notify user via Telegram Bot
+      api.notifyWithdrawalStatus({
+        userId: wd.user_id,
+        status: 'completed',
+        amount: wd.amount,
+        netAmount: wd.net_amount,
+        walletAddress: wd.wallet_address,
+        txHash: res.txHash,
+        adminNote: `Auto-paid on-chain: ${res.txHash}`
+      }).catch(() => {});
+
       const updated = await getAllWithdrawalsFirestore();
       setWithdrawals(updated);
     } catch (err: any) {
@@ -277,6 +290,16 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
     setProcessingWdId(wd.id);
     try {
       await adminUpdateWithdrawalStatusFirestore(wd.id, 'completed');
+
+      // Notify user via Telegram Bot
+      api.notifyWithdrawalStatus({
+        userId: wd.user_id,
+        status: 'completed',
+        amount: wd.amount,
+        netAmount: wd.net_amount,
+        walletAddress: wd.wallet_address
+      }).catch(() => {});
+
       const updated = await getAllWithdrawalsFirestore();
       setWithdrawals(updated);
     } catch (err: any) {
@@ -296,6 +319,17 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
     setProcessingWdId(wd.id);
     try {
       await adminUpdateWithdrawalStatusFirestore(wd.id, 'rejected', reason);
+
+      // Notify user via Telegram Bot
+      api.notifyWithdrawalStatus({
+        userId: wd.user_id,
+        status: 'rejected',
+        amount: wd.amount,
+        netAmount: wd.net_amount,
+        walletAddress: wd.wallet_address,
+        adminNote: reason
+      }).catch(() => {});
+
       const [updatedWd, updatedUsers] = await Promise.all([
         getAllWithdrawalsFirestore(),
         getAdminUsersFirestore(searchQuery)

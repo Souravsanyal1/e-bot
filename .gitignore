@@ -23,3 +23,5 @@ Thumbs.db
 # Vite Build (optional, keep dist if you want prebuilt static files, or ignore)
 dist/
 .tmp/
+.firebase/
+scratch/

@@ -12,6 +12,13 @@ import { initBot, broadcastMessage } from './bot.js';
 import { firestoreDB } from './firebase.js';
 import { calculateMiningState, startMiningSession, claimMiningSession } from './services/mining.js';
 import { getTasksForUser, completeTask } from './services/tasks.js';
+import { 
+  startMiningNotificationScheduler,
+  sendMiningClaimedNotification,
+  sendTaskCompletedNotification,
+  sendWithdrawalSubmittedNotification,
+  sendWithdrawalStatusNotification
+} from './services/notifications.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,6 +86,7 @@ async function startServer() {
   await initDatabase();
   await initRedis();
   initBot();
+  startMiningNotificationScheduler();
 
   // Allow empty body for POST requests with application/json header
   fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
@@ -322,6 +330,99 @@ async function startServer() {
         referrals: u.referral_count || 0
       }))
     };
+  });
+
+  // --- TELEGRAM BOT NOTIFICATION ROUTES ---
+
+  // Notify Task Completion
+  fastify.post('/api/notify/task-complete', async (req, reply) => {
+    const user = extractUserFromRequest(req);
+    const userId = user?.id || req.body?.userId;
+    if (!userId) return reply.code(400).send({ error: 'User ID is required' });
+
+    const { taskTitle, rewardCoins, speedBoost, newBalance, newSpeed } = req.body || {};
+    await sendTaskCompletedNotification(userId, {
+      taskTitle,
+      rewardCoins,
+      speedBoost,
+      newBalance,
+      newSpeed
+    });
+
+    return { success: true };
+  });
+
+  // Notify Mining Claim
+  fastify.post('/api/notify/mining-claim', async (req, reply) => {
+    const user = extractUserFromRequest(req);
+    const userId = user?.id || req.body?.userId;
+    if (!userId) return reply.code(400).send({ error: 'User ID is required' });
+
+    const { claimedAmount, newBalance } = req.body || {};
+    await sendMiningClaimedNotification(userId, { claimedAmount, newBalance });
+
+    return { success: true };
+  });
+
+  // Notify Withdrawal Submitted (Alerts user + admin)
+  fastify.post('/api/notify/withdrawal-submitted', async (req, reply) => {
+    const user = extractUserFromRequest(req);
+    const userId = user?.id || req.body?.userId;
+    if (!userId) return reply.code(400).send({ error: 'User ID is required' });
+
+    const {
+      userName,
+      username,
+      amount,
+      feeAmount,
+      feePercent,
+      netAmount,
+      walletAddress,
+      referCode
+    } = req.body || {};
+
+    await sendWithdrawalSubmittedNotification({
+      userId,
+      userName: userName || user?.first_name || 'Miner',
+      username: username || user?.username || '',
+      amount,
+      feeAmount,
+      feePercent,
+      netAmount,
+      walletAddress,
+      referCode
+    });
+
+    return { success: true };
+  });
+
+  // Notify Withdrawal Status Updated (Approved/Completed or Rejected)
+  fastify.post('/api/notify/withdrawal-status', async (req, reply) => {
+    const {
+      userId,
+      status,
+      amount,
+      netAmount,
+      walletAddress,
+      txHash,
+      adminNote
+    } = req.body || {};
+
+    if (!userId || !status) {
+      return reply.code(400).send({ error: 'userId and status are required' });
+    }
+
+    await sendWithdrawalStatusNotification({
+      userId,
+      status,
+      amount,
+      netAmount,
+      walletAddress,
+      txHash,
+      adminNote
+    });
+
+    return { success: true };
   });
 
   // --- ADMIN PROTECTED ROUTES ---

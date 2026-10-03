@@ -84,6 +84,85 @@ export const api = {
     return request('/leaderboard');
   },
 
+  // Telegram Bot Notifications
+  async notifyTaskComplete(params: {
+    userId?: number;
+    taskId?: number | string;
+    taskTitle?: string;
+    rewardCoins?: number;
+    speedBoost?: number;
+    newBalance?: number;
+    newSpeed?: number;
+  }): Promise<{ success: boolean }> {
+    try {
+      return await request('/notify/task-complete', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    } catch (e) {
+      console.warn('Telegram notifyTaskComplete fallback:', e);
+      return { success: false };
+    }
+  },
+
+  async notifyMiningClaim(params: {
+    userId?: number;
+    claimedAmount: number;
+    newBalance: number;
+  }): Promise<{ success: boolean }> {
+    try {
+      return await request('/notify/mining-claim', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    } catch (e) {
+      console.warn('Telegram notifyMiningClaim fallback:', e);
+      return { success: false };
+    }
+  },
+
+  async notifyWithdrawalSubmitted(params: {
+    userId: number;
+    userName?: string;
+    username?: string;
+    amount: number;
+    feeAmount: number;
+    feePercent: number;
+    netAmount: number;
+    walletAddress: string;
+    referCode: string;
+  }): Promise<{ success: boolean }> {
+    try {
+      return await request('/notify/withdrawal-submitted', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    } catch (e) {
+      console.warn('Telegram notifyWithdrawalSubmitted fallback:', e);
+      return { success: false };
+    }
+  },
+
+  async notifyWithdrawalStatus(params: {
+    userId: number;
+    status: 'completed' | 'rejected';
+    amount?: number;
+    netAmount?: number;
+    walletAddress?: string;
+    txHash?: string;
+    adminNote?: string;
+  }): Promise<{ success: boolean }> {
+    try {
+      return await request('/notify/withdrawal-status', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    } catch (e) {
+      console.warn('Telegram notifyWithdrawalStatus fallback:', e);
+      return { success: false };
+    }
+  },
+
   // Admin APIs
   admin: {
     async getStats(): Promise<AdminStats> {

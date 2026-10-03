@@ -66,6 +66,7 @@ export async function initDatabase() {
       speed_per_hr REAL DEFAULT 0.5,
       mining_start_time TEXT,
       last_claim_time TEXT,
+      last_mining_notified_time TEXT,
       referred_by INTEGER,
       referral_count INTEGER DEFAULT 0,
       is_banned INTEGER DEFAULT 0,
@@ -127,6 +128,13 @@ export async function initDatabase() {
     insert.run('Follow E-FORCE on X (Twitter)', 'Follow our official X handle and retweet the pinned 24H mining announcement.', 35.0, 0.08, 'standard', 'link', 'https://x.com', 0, 10);
     insert.run('🔥 SPECIAL: Supercharge Core with Video Partner', 'Watch our special partner video showcase and unlock double speed boost!', 100.0, 0.25, 'special', 'ad', '', 1, 20);
     insert.run('⚡ SPECIAL: Connect TON / Web3 Wallet Preview', 'Bookmark the upcoming Web3 smart contract connection portal.', 75.0, 0.20, 'special', 'link', 'https://ton.org', 0, 10);
+  }
+
+  // Safe migration for existing SQLite users table
+  try {
+    sqliteDb.exec(`ALTER TABLE users ADD COLUMN last_mining_notified_time TEXT;`);
+  } catch (_e) {
+    // Column already exists
   }
 
   console.log('SQLite database initialized at', dbPath);

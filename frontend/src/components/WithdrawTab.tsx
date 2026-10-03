@@ -12,6 +12,7 @@ import {
 } from '../services/firestore';
 import { NETWORKS } from '../services/blockchain';
 import { tg } from '../services/telegram';
+import { api } from '../services/api';
 import type { User, WithdrawalRequest } from '../types';
 
 interface WithdrawTabProps {
@@ -175,6 +176,19 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
       if (onBalanceUpdate) {
         onBalanceUpdate(res.newBalance);
       }
+
+      // Trigger Telegram Bot Notification (Alerts user and admin)
+      api.notifyWithdrawalSubmitted({
+        userId: user.id,
+        userName: user.first_name || 'Miner',
+        username: user.username || '',
+        amount: parsedAmount,
+        feeAmount: res.withdrawal.fee_amount,
+        feePercent: res.withdrawal.fee_percent,
+        netAmount: res.withdrawal.net_amount,
+        walletAddress: cleanAddr,
+        referCode: cleanCode
+      }).catch(() => {});
 
       tg.haptic.notification('success');
       setSuccessMessage(`Withdrawal request of ${parsedAmount} E-FORCE submitted to admin successfully!`);

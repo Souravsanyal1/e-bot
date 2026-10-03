@@ -21,6 +21,7 @@ import {
   subscribeToUserFirestore 
 } from './services/firestore';
 import { tg } from './services/telegram';
+import { api } from './services/api';
 import type { User, MiningState, Task, ReferralData, LeaderboardUser } from './types';
 
 export const App: React.FC = () => {
@@ -169,10 +170,18 @@ export const App: React.FC = () => {
 
   const handleClaimMining = async () => {
     if (!user) return;
+    const unclaimed = mining?.mined_unclaimed || 0;
     try {
       const res = await claimMiningFirestore(user.id, user.speed_per_hr || 0.5);
       setMining(res.mining);
       setUser(prev => prev ? { ...prev, balance: res.balance } : null);
+
+      // Trigger Telegram Bot Notification
+      api.notifyMiningClaim({
+        userId: user.id,
+        claimedAmount: unclaimed,
+        newBalance: res.balance
+      }).catch(() => {});
     } catch (e: any) {
       console.warn('Claim error:', e.message);
     }
@@ -181,6 +190,7 @@ export const App: React.FC = () => {
   // Task Actions via Cloud Firestore
   const handleCompleteTask = async (taskId: number) => {
     if (!user) return;
+    const taskObj = [...standardTasks, ...specialTasks].find(t => Number(t.id) === Number(taskId));
     try {
       const res = await completeTaskFirestore(user.id, taskId);
       setUser(prev => prev ? { ...prev, balance: res.new_balance, speed_per_hr: res.new_speed } : null);
@@ -188,6 +198,17 @@ export const App: React.FC = () => {
         setMining({ ...mining, speed_per_hr: res.new_speed });
       }
       loadTabContent(user.id);
+
+      // Trigger Telegram Bot Notification
+      api.notifyTaskComplete({
+        userId: user.id,
+        taskId: taskId,
+        taskTitle: taskObj?.title || 'Mission Task',
+        rewardCoins: res.reward_coins,
+        speedBoost: res.speed_boost,
+        newBalance: res.new_balance,
+        newSpeed: res.new_speed
+      }).catch(() => {});
     } catch (e: any) {
       alert(e.message);
     }
