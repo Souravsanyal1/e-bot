@@ -383,21 +383,21 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
 
         {/* Field 2: Elite Force Refer Code (6 Digit) */}
         <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
-              <span>Elite Force Refer Code</span>
-              <span className="text-brand-orange">* (6 Digits)</span>
+          <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+            <label className="text-xs font-bold text-gray-200 flex items-center gap-1 shrink-0 whitespace-nowrap">
+              <span>Refer Code</span>
+              <span className="text-brand-orange text-[11px] font-semibold">* (6 Digits)</span>
             </label>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
               {referCode.length === 6 && (
-                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 flex items-center gap-1">
-                  <CheckCircle2 size={10} /> Auto-Generated
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 inline-flex items-center gap-1 whitespace-nowrap">
+                  <CheckCircle2 size={11} /> Auto-Generated
                 </span>
               )}
               <button
                 type="button"
                 onClick={handleRegenerateCode}
-                className="text-[11px] font-bold text-brand-orange hover:text-orange-400 flex items-center gap-1 px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 active:scale-95 transition-all cursor-pointer"
+                className="text-[11px] font-bold text-brand-orange hover:text-orange-400 flex items-center gap-1 px-2.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
                 title="Generate new 6-digit code"
               >
                 <Sparkles size={11} /> Generate
@@ -437,12 +437,12 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
 
         {/* Field 3: Amount to Withdraw */}
         <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+          <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+            <label className="text-xs font-bold text-gray-200 flex items-center gap-1.5 shrink-0 whitespace-nowrap">
               <span>Withdraw Amount</span>
               <span className="text-brand-orange">*</span>
             </label>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0 ml-auto">
               {[25, 50, 75].map(pct => (
                 <button
                   key={pct}
