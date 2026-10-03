@@ -18,7 +18,9 @@ import {
   completeTaskFirestore, 
   getReferralsFirestore, 
   getLeaderboardFirestore, 
-  subscribeToUserFirestore 
+  subscribeToUserFirestore,
+  getAppSettings,
+  type AppSettings
 } from './services/firestore';
 import { tg } from './services/telegram';
 import { api } from './services/api';
@@ -32,6 +34,7 @@ export const App: React.FC = () => {
   const [specialTasks, setSpecialTasks] = useState<Task[]>([]);
   const [referrals, setReferrals] = useState<ReferralData | null>(null);
   const [topMiners, setTopMiners] = useState<LeaderboardUser[]>([]);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
 
   // Admin authentication state using Gmail & Password / Session
   const [adminAuthenticated, setAdminAuthenticated] = useState<boolean>(() => {
@@ -58,6 +61,9 @@ export const App: React.FC = () => {
   // Initialize Telegram & Sync Profile with Cloud Firestore
   useEffect(() => {
     tg.init();
+
+    // Load initial app settings
+    getAppSettings().then(setAppSettings).catch(() => {});
 
     // Check referral query param
     const searchParams = new URLSearchParams(window.location.search);
@@ -231,7 +237,11 @@ export const App: React.FC = () => {
     return (
       <AdminTab
         adminEmail={adminEmail}
-        onExit={() => setCurrentTab('mining')}
+        onExit={() => {
+          getAppSettings().then(setAppSettings).catch(() => {});
+          setCurrentTab('mining');
+        }}
+        onSettingsUpdated={(newSettings) => setAppSettings(newSettings)}
         onSignOut={() => {
           localStorage.removeItem('eforce_admin_session');
           setAdminAuthenticated(false);
@@ -250,7 +260,7 @@ export const App: React.FC = () => {
       {/* Top Bar */}
       <Navbar
         user={user}
-        activeSpeed={mining?.speed_per_hr || user?.speed_per_hr || 0.5}
+        activeSpeed={mining?.speed_per_hr || user?.speed_per_hr || appSettings?.base_mining_rate || 0.5}
       />
 
       {/* Main Tab Router View */}
@@ -267,6 +277,7 @@ export const App: React.FC = () => {
               <MiningTab
                 user={user}
                 mining={mining}
+                appSettings={appSettings}
                 onStartMining={handleStartMining}
                 onClaimMining={handleClaimMining}
                 onNavigateToTasks={() => setCurrentTab('tasks')}
@@ -319,6 +330,7 @@ export const App: React.FC = () => {
             >
               <FriendsTab
                 referrals={referrals}
+                appSettings={appSettings}
                 onRefresh={loadTabContent}
               />
             </motion.div>

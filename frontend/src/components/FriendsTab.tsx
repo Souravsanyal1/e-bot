@@ -2,15 +2,21 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Copy, Check, Share2, Zap, Gift, Sparkles, UserPlus } from 'lucide-react';
 import type { ReferralData } from '../types';
+import type { AppSettings } from '../services/firestore';
 import { tg } from '../services/telegram';
 
 interface FriendsTabProps {
   referrals: ReferralData | null;
+  appSettings?: AppSettings | null;
   onRefresh: () => void;
 }
 
-export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals }) => {
+export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals, appSettings }) => {
   const [copied, setCopied] = useState(false);
+
+  const refBoostRate = appSettings?.referral_speed_boost ?? 0.05;
+  const refBonusCoins = appSettings?.referral_coin_bonus ?? 10.0;
+  const sessionHours = appSettings?.session_duration_hours ?? 24;
 
   const referralLink = referrals?.referral_link || 'https://t.me/Elite_Force_Official_Mining_bot?start=ref_miner';
 
@@ -25,7 +31,7 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals }) => {
     tg.haptic.impact('heavy');
     const shareText = encodeURIComponent(
       `⚔️ Join my squad on E-FORCE!\n` +
-      `Start 24-Hour limited mining and get +10 E-FORCE + mining speed boost on sign-up! 🚀`
+      `Start ${sessionHours}-Hour limited mining and get +${refBonusCoins} E-FORCE + mining speed boost on sign-up! 🚀`
     );
     const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${shareText}`;
     tg.openTelegramLink(tgShareUrl);
@@ -44,7 +50,7 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals }) => {
               Invite Friends & Accelerate Speed
             </h2>
             <p className="text-xs text-gray-300 mt-1">
-              Every active referral grants you <span className="text-brand-orange font-bold">+0.05 E-FORCE/hr</span> boost!
+              Every active referral grants you <span className="text-brand-orange font-bold">+{refBoostRate.toFixed(2)} E-FORCE/hr</span> boost!
             </p>
           </div>
 
@@ -142,9 +148,9 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals }) => {
               <Zap size={15} />
             </div>
             <div>
-              <div className="text-xs font-bold text-white">+0.05 E-FORCE / hr Permanent Boost</div>
+              <div className="text-xs font-bold text-white">+{refBoostRate.toFixed(2)} E-FORCE / hr Permanent Boost</div>
               <div className="text-[11px] text-gray-400">
-                Directly added to your 24H mining reactor engine speed for each referred user.
+                Directly added to your {sessionHours}H mining reactor engine speed for each referred user.
               </div>
             </div>
           </div>
@@ -154,7 +160,7 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals }) => {
               <Gift size={15} />
             </div>
             <div>
-              <div className="text-xs font-bold text-white">+10.00 E-FORCE Instant Bonus</div>
+              <div className="text-xs font-bold text-white">+{refBonusCoins.toFixed(2)} E-FORCE Instant Bonus</div>
               <div className="text-[11px] text-gray-400">
                 Instantly credited to your balance the moment your friend activates their mini app.
               </div>

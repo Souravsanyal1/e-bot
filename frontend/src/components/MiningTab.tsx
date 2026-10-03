@@ -3,11 +3,13 @@ import { motion } from 'framer-motion';
 import { Zap, Clock, Sparkles, TrendingUp, Award, PlayCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { MiningState, User } from '../types';
+import type { AppSettings } from '../services/firestore';
 import { tg } from '../services/telegram';
 
 interface MiningTabProps {
   user: User | null;
   mining: MiningState | null;
+  appSettings?: AppSettings | null;
   onStartMining: () => Promise<void>;
   onClaimMining: () => Promise<void>;
   onNavigateToTasks: () => void;
@@ -17,14 +19,24 @@ interface MiningTabProps {
 export const MiningTab: React.FC<MiningTabProps> = ({
   user,
   mining,
+  appSettings,
   onStartMining,
   onClaimMining,
   onNavigateToTasks,
   onNavigateToFriends,
 }) => {
+  const baseRate = appSettings?.base_mining_rate ?? 0.5;
+  const refBoostRate = appSettings?.referral_speed_boost ?? 0.05;
+  const sessionHours = appSettings?.session_duration_hours ?? 24;
+
+  const currentSpeed = mining?.speed_per_hr ?? user?.speed_per_hr ?? baseRate;
+  const referralCount = user?.referral_count || 0;
+  const totalRefBoost = referralCount * refBoostRate;
+  const totalTasksBoost = Math.max(0, currentSpeed - baseRate - totalRefBoost);
+
   const [loading, setLoading] = useState(false);
   const [liveUnclaimed, setLiveUnclaimed] = useState<number>(mining?.mined_unclaimed || 0);
-  const [countdown, setCountdown] = useState<number>(mining?.remaining_seconds || 86400);
+  const [countdown, setCountdown] = useState<number>(mining?.remaining_seconds || sessionHours * 3600);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const isMining = Boolean(mining?.is_mining);
@@ -216,7 +228,7 @@ export const MiningTab: React.FC<MiningTabProps> = ({
           <div className="font-mono text-lg font-bold text-white tracking-wider">
             {formatTime(countdown)}
           </div>
-          <span className="text-[10px] text-gray-500">24H Protocol</span>
+          <span className="text-[10px] text-gray-500">{sessionHours}H Protocol</span>
         </div>
 
         {/* Live Accumulation Yield */}
@@ -260,7 +272,7 @@ export const MiningTab: React.FC<MiningTabProps> = ({
         ) : (
           <>
             <Zap size={20} className="fill-black" />
-            <span>START 24H MINING CORE</span>
+            <span>START {sessionHours}H MINING CORE</span>
           </>
         )}
       </motion.button>
@@ -273,25 +285,25 @@ export const MiningTab: React.FC<MiningTabProps> = ({
             <h3 className="text-sm font-bold text-white">Engine Power Breakdown</h3>
           </div>
           <span className="text-xs font-mono font-bold text-orange-400">
-            {mining?.speed_per_hr ? mining.speed_per_hr.toFixed(2) : '0.50'} /hr
+            {currentSpeed.toFixed(2)} /hr
           </span>
         </div>
 
         <div className="space-y-2 text-xs">
           <div className="flex justify-between text-gray-400">
-            <span>Base 24H Rate:</span>
-            <span className="text-white font-medium">0.50 E-FORCE/hr</span>
+            <span>Base {sessionHours}H Rate:</span>
+            <span className="text-white font-medium">{baseRate.toFixed(2)} E-FORCE/hr</span>
           </div>
           <div className="flex justify-between text-gray-400">
             <span>Tasks Completed Boost:</span>
             <span className="text-orange-400 font-medium">
-              +{Math.max(0, (mining?.speed_per_hr || 0.5) - 0.5 - (user?.referral_count || 0) * 0.05).toFixed(2)}/hr
+              +{totalTasksBoost.toFixed(2)}/hr
             </span>
           </div>
           <div className="flex justify-between text-gray-400">
-            <span>Referrals Boost ({user?.referral_count || 0} friends):</span>
+            <span>Referrals Boost ({referralCount} friends):</span>
             <span className="text-green-400 font-medium">
-              +{((user?.referral_count || 0) * 0.05).toFixed(2)}/hr
+              +{totalRefBoost.toFixed(2)}/hr
             </span>
           </div>
         </div>
@@ -309,7 +321,7 @@ export const MiningTab: React.FC<MiningTabProps> = ({
             onClick={onNavigateToFriends}
             className="py-2.5 px-3 rounded-xl bg-white/10 border border-white/15 text-xs font-bold text-white hover:bg-white/15 transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
           >
-            <span>Invite Friends (+0.05)</span>
+            <span>Invite Friends (+{refBoostRate.toFixed(2)})</span>
           </button>
         </div>
       </div>

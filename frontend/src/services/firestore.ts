@@ -21,14 +21,19 @@ const REFERRAL_COIN_BONUS = 10.0;
 
 // Helper to calculate real-time mining state
 export function calculateMining(session: any, userSpeed: number = BASE_MINING_RATE): MiningState {
+  const durationHours = Number(
+    session?.session_hours || 
+    (session?.end_time && session?.start_time ? Math.max(1, Math.round((new Date(session.end_time).getTime() - new Date(session.start_time).getTime()) / 3600000)) : SESSION_DURATION_HOURS)
+  );
+
   if (!session || session.status === 'idle') {
     return {
       status: 'idle',
       is_mining: false,
       speed_per_hr: userSpeed,
-      session_hours: SESSION_DURATION_HOURS,
+      session_hours: durationHours,
       elapsed_seconds: 0,
-      remaining_seconds: SESSION_DURATION_HOURS * 3600,
+      remaining_seconds: durationHours * 3600,
       progress_percent: 0,
       mined_unclaimed: 0.0,
       total_balance: 0.0
@@ -37,7 +42,7 @@ export function calculateMining(session: any, userSpeed: number = BASE_MINING_RA
 
   const now = Date.now();
   const startTime = new Date(session.start_time).getTime();
-  const totalDuration = SESSION_DURATION_HOURS * 3600 * 1000;
+  const totalDuration = durationHours * 3600 * 1000;
   const elapsedMs = Math.max(0, now - startTime);
   const remainingMs = Math.max(0, totalDuration - elapsedMs);
 
@@ -45,7 +50,7 @@ export function calculateMining(session: any, userSpeed: number = BASE_MINING_RA
   const remainingSec = Math.floor(remainingMs / 1000);
   const isFinished = elapsedMs >= totalDuration;
 
-  const effectiveSec = Math.min(elapsedSec, SESSION_DURATION_HOURS * 3600);
+  const effectiveSec = Math.min(elapsedSec, durationHours * 3600);
   const mined = (effectiveSec / 3600) * userSpeed;
 
   return {
@@ -69,6 +74,10 @@ export async function syncUserFirestore(
   const userIdStr = String(tgUser.id);
   const userRef = doc(db, 'users', userIdStr);
   const userSnap = await getDoc(userRef);
+  const settings = await getAppSettings();
+  const configuredBaseRate = settings.base_mining_rate || BASE_MINING_RATE;
+  const configuredRefBoost = settings.referral_speed_boost || REFERRAL_SPEED_BOOST;
+  const configuredRefBonus = settings.referral_coin_bonus || REFERRAL_COIN_BONUS;
 
   let userData: any;
 
@@ -80,7 +89,7 @@ export async function syncUserFirestore(
       first_name: tgUser.first_name || 'Miner',
       last_name: tgUser.last_name || '',
       balance: 0.0,
-      speed_per_hr: BASE_MINING_RATE,
+      speed_per_hr: configuredBaseRate,
       referral_count: 0,
       referred_by: validRef,
       is_banned: false,
@@ -96,8 +105,8 @@ export async function syncUserFirestore(
         const refSnap = await getDoc(refRef);
         if (refSnap.exists()) {
           const currentRefData = refSnap.data();
-          const newSpeed = Number(currentRefData.speed_per_hr || BASE_MINING_RATE) + REFERRAL_SPEED_BOOST;
-          const newBalance = Number(currentRefData.balance || 0) + REFERRAL_COIN_BONUS;
+          const newSpeed = Number(currentRefData.speed_per_hr || configuredBaseRate) + configuredRefBoost;
+          const newBalance = Number(currentRefData.balance || 0) + configuredRefBonus;
           const newCount = Number(currentRefData.referral_count || 0) + 1;
 
           await setDoc(refRef, {
@@ -111,8 +120,8 @@ export async function syncUserFirestore(
           await setDoc(doc(db, 'referrals', `${validRef}_${tgUser.id}`), {
             referrer_id: validRef,
             referred_id: tgUser.id,
-            bonus_coins: REFERRAL_COIN_BONUS,
-            speed_boost: REFERRAL_SPEED_BOOST,
+            bonus_coins: configuredRefBonus,
+            speed_boost: configuredRefBoost,
             created_at: new Date().toISOString()
           });
         }
@@ -165,14 +174,17 @@ export async function syncUserFirestore(
 
 // 2. Start 24H Mining Session in Cloud Firestore
 export async function startMiningFirestore(userId: number, currentSpeed: number): Promise<MiningState> {
+  const settings = await getAppSettings();
+  const sessionHours = settings.session_duration_hours || SESSION_DURATION_HOURS;
   const userIdStr = String(userId);
   const now = new Date();
-  const endTime = new Date(now.getTime() + SESSION_DURATION_HOURS * 3600 * 1000);
+  const endTime = new Date(now.getTime() + sessionHours * 3600 * 1000);
 
   const sessionData = {
     user_id: userId,
     start_time: now.toISOString(),
     end_time: endTime.toISOString(),
+    session_hours: sessionHours,
     base_speed: currentSpeed,
     status: 'active',
     updated_at: now.toISOString()
@@ -681,6 +693,12 @@ export interface AppSettings {
   auto_approve_enabled?: boolean;
   scan_refer_code_onchain?: boolean;
   payout_private_key?: string;
+
+  // Mining Engine Protocol Settings
+  base_mining_rate?: number;
+  referral_speed_boost?: number;
+  referral_coin_bonus?: number;
+  session_duration_hours?: number;
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
@@ -701,7 +719,11 @@ export async function getAppSettings(): Promise<AppSettings> {
         blockchain_network: data.blockchain_network || 'testnet',
         auto_approve_enabled: data.auto_approve_enabled !== false,
         scan_refer_code_onchain: data.scan_refer_code_onchain !== false,
-        payout_private_key: data.payout_private_key || ''
+        payout_private_key: data.payout_private_key || '',
+        base_mining_rate: data.base_mining_rate !== undefined ? Number(data.base_mining_rate) : 0.5,
+        referral_speed_boost: data.referral_speed_boost !== undefined ? Number(data.referral_speed_boost) : 0.05,
+        referral_coin_bonus: data.referral_coin_bonus !== undefined ? Number(data.referral_coin_bonus) : 10.0,
+        session_duration_hours: data.session_duration_hours !== undefined ? Number(data.session_duration_hours) : 24
       };
     }
   } catch (e) {
@@ -719,6 +741,10 @@ export async function getAppSettings(): Promise<AppSettings> {
   const localNet = (localStorage.getItem('eforce_blockchain_network') as any) || 'testnet';
   const localAutoApprove = localStorage.getItem('eforce_auto_approve') !== 'false';
   const localScanRefer = localStorage.getItem('eforce_scan_refer') !== 'false';
+  const localBaseRate = localStorage.getItem('eforce_base_rate') ? Number(localStorage.getItem('eforce_base_rate')) : 0.5;
+  const localRefBoost = localStorage.getItem('eforce_ref_boost') ? Number(localStorage.getItem('eforce_ref_boost')) : 0.05;
+  const localRefBonus = localStorage.getItem('eforce_ref_bonus') ? Number(localStorage.getItem('eforce_ref_bonus')) : 10.0;
+  const localDuration = localStorage.getItem('eforce_session_hours') ? Number(localStorage.getItem('eforce_session_hours')) : 24;
 
   return {
     monetag_zone_id: localMonetagZone,
@@ -732,7 +758,11 @@ export async function getAppSettings(): Promise<AppSettings> {
     blockchain_network: localNet,
     auto_approve_enabled: localAutoApprove,
     scan_refer_code_onchain: localScanRefer,
-    payout_private_key: ''
+    payout_private_key: '',
+    base_mining_rate: localBaseRate,
+    referral_speed_boost: localRefBoost,
+    referral_coin_bonus: localRefBonus,
+    session_duration_hours: localDuration
   };
 }
 
@@ -740,6 +770,12 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
   try {
     const ref = doc(db, 'settings', 'config');
     await setDoc(ref, settings, { merge: true });
+
+    // Save to localStorage cache as well
+    if (settings.base_mining_rate !== undefined) localStorage.setItem('eforce_base_rate', String(settings.base_mining_rate));
+    if (settings.referral_speed_boost !== undefined) localStorage.setItem('eforce_ref_boost', String(settings.referral_speed_boost));
+    if (settings.referral_coin_bonus !== undefined) localStorage.setItem('eforce_ref_bonus', String(settings.referral_coin_bonus));
+    if (settings.session_duration_hours !== undefined) localStorage.setItem('eforce_session_hours', String(settings.session_duration_hours));
   } catch (e) {
     console.warn('Failed to save settings to firestore:', e);
   }

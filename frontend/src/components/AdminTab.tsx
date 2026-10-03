@@ -5,7 +5,7 @@ import {
   ArrowLeft, CheckCircle2, AlertTriangle, Radio, 
   ExternalLink, Ban, Sparkles, MessageSquare,
   Sliders, Wallet, Copy, Check, XCircle, Clock,
-  Eye, EyeOff, Cpu, Play
+  Eye, EyeOff, Cpu, Play, TrendingUp, Gauge
 } from 'lucide-react';
 import { 
   getAdminStatsFirestore, 
@@ -34,11 +34,12 @@ interface AdminTabProps {
   adminEmail?: string;
   onExit?: () => void;
   onSignOut?: () => void;
+  onSettingsUpdated?: (settings: any) => void;
 }
 
 type AdminSection = 'overview' | 'withdrawals' | 'users' | 'tasks' | 'broadcast';
 
-export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOut }) => {
+export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOut, onSettingsUpdated }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
   const [stats, setStats] = useState<AdminStats>({
     totalUsers: 0,
@@ -98,6 +99,14 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
+  // Mining Engine Protocol Settings
+  const [baseMiningRate, setBaseMiningRate] = useState<number>(0.5);
+  const [referralSpeedBoost, setReferralSpeedBoost] = useState<number>(0.05);
+  const [referralCoinBonus, setReferralCoinBonus] = useState<number>(10.0);
+  const [sessionDurationHours, setSessionDurationHours] = useState<number>(24);
+  const [savingMiningSettings, setSavingMiningSettings] = useState(false);
+  const [miningSettingsSaved, setMiningSettingsSaved] = useState(false);
+
   // Clear All User Data state
   const [clearingData, setClearingData] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
@@ -129,10 +138,38 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
       setAutoApproveEnabled(appSettings.auto_approve_enabled !== false);
       setScanReferCodeOnchain(appSettings.scan_refer_code_onchain !== false);
       setPayoutPrivateKey(appSettings.payout_private_key || '');
+
+      setBaseMiningRate(appSettings.base_mining_rate !== undefined ? appSettings.base_mining_rate : 0.5);
+      setReferralSpeedBoost(appSettings.referral_speed_boost !== undefined ? appSettings.referral_speed_boost : 0.05);
+      setReferralCoinBonus(appSettings.referral_coin_bonus !== undefined ? appSettings.referral_coin_bonus : 10.0);
+      setSessionDurationHours(appSettings.session_duration_hours !== undefined ? appSettings.session_duration_hours : 24);
     } catch (err: any) {
       console.warn('Admin load error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveMiningSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingMiningSettings(true);
+    try {
+      const updated = {
+        base_mining_rate: Number(baseMiningRate),
+        referral_speed_boost: Number(referralSpeedBoost),
+        referral_coin_bonus: Number(referralCoinBonus),
+        session_duration_hours: Number(sessionDurationHours)
+      };
+      await updateAppSettings(updated);
+      setMiningSettingsSaved(true);
+      if (onSettingsUpdated) {
+        onSettingsUpdated(await getAppSettings());
+      }
+      setTimeout(() => setMiningSettingsSaved(false), 3000);
+    } catch (err: any) {
+      alert('Error saving mining settings: ' + err.message);
+    } finally {
+      setSavingMiningSettings(false);
     }
   };
 
@@ -756,6 +793,193 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                   <Send size={16} />
                   <span>Open Telegram Bot Broadcast Studio</span>
                 </button>
+              </div>
+            </div>
+
+            {/* Mining Engine & Yield Power Breakdown Protocol Configuration Panel */}
+            <div className="glass-panel p-6 rounded-2xl border border-orange-500/30 shadow-orange-glow mt-6 bg-gradient-to-b from-orange-500/5 via-transparent to-transparent">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Gauge size={19} className="text-brand-orange" />
+                    <span>Mining Engine & Yield Rate Protocol Configuration</span>
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Control live mining engine rates, referral speed boosters, bonus tokens, and session cycle hours across the mini-app.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-orange-500/15 text-orange-300 border border-orange-500/30 flex items-center gap-1.5">
+                    <Zap size={13} className="text-brand-orange fill-brand-orange" />
+                    <span>Active Protocol: {(Number(baseMiningRate) || 0.5).toFixed(2)}/hr Base</span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Form Inputs (Left) */}
+                <form onSubmit={handleSaveMiningSettings} className="lg:col-span-7 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Base Mining Rate */}
+                    <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
+                      <label className="text-xs text-gray-300 font-bold block flex items-center gap-1.5">
+                        <TrendingUp size={14} className="text-brand-orange" />
+                        <span>Base 24H Rate (E-FORCE/hr)</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={baseMiningRate}
+                        onChange={(e) => setBaseMiningRate(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-orange font-mono font-bold"
+                        required
+                      />
+                      <p className="text-[11px] text-gray-400">
+                        Default mining speed given to every new miner before boosters.
+                      </p>
+                    </div>
+
+                    {/* Referral Speed Boost */}
+                    <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
+                      <label className="text-xs text-gray-300 font-bold block flex items-center gap-1.5">
+                        <Zap size={14} className="text-yellow-400" />
+                        <span>Referral Boost (+E-FORCE/hr)</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={referralSpeedBoost}
+                        onChange={(e) => setReferralSpeedBoost(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-orange font-mono font-bold"
+                        required
+                      />
+                      <p className="text-[11px] text-gray-400">
+                        Permanent hourly speed boost added per invited friend.
+                      </p>
+                    </div>
+
+                    {/* Referral Welcome / Sign-up Coin Bonus */}
+                    <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
+                      <label className="text-xs text-gray-300 font-bold block flex items-center gap-1.5">
+                        <Coins size={14} className="text-yellow-300" />
+                        <span>Referral Bonus (E-FORCE coins)</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={referralCoinBonus}
+                        onChange={(e) => setReferralCoinBonus(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-orange font-mono font-bold"
+                        required
+                      />
+                      <p className="text-[11px] text-gray-400">
+                        Instant token bounty credited to referrer when a friend joins.
+                      </p>
+                    </div>
+
+                    {/* Mining Session Duration */}
+                    <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
+                      <label className="text-xs text-gray-300 font-bold block flex items-center gap-1.5">
+                        <Clock size={14} className="text-cyan-400" />
+                        <span>Session Duration (Hours)</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        max="168"
+                        value={sessionDurationHours}
+                        onChange={(e) => setSessionDurationHours(parseInt(e.target.value) || 24)}
+                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-orange font-mono font-bold"
+                        required
+                      />
+                      <p className="text-[11px] text-gray-400">
+                        Hours per mining cycle before user must claim yield (Default: 24).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={savingMiningSettings}
+                      className="px-6 py-3 rounded-xl bg-gradient-to-r from-brand-orange to-orange-500 text-white font-black text-xs tracking-wider uppercase shadow-orange-glow hover:brightness-110 transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      {savingMiningSettings ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <CheckCircle2 size={16} />
+                      )}
+                      <span>Save Mining Engine Settings</span>
+                    </button>
+
+                    {miningSettingsSaved && (
+                      <span className="text-xs font-bold text-green-400 flex items-center gap-1.5 animate-pulse">
+                        <CheckCircle2 size={15} /> Saved & Applied Live in Firestore!
+                      </span>
+                    )}
+                  </div>
+                </form>
+
+                {/* Live Preview Card (Right) */}
+                <div className="lg:col-span-5 bg-black/60 border border-orange-500/30 rounded-2xl p-4 shadow-xl">
+                  <div className="flex items-center justify-between pb-2 mb-3 border-b border-white/10">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-orange-400">
+                      Live User Interface Preview
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-mono">
+                      MiningTab.tsx
+                    </span>
+                  </div>
+
+                  {/* Exact Visual Replication of Engine Power Breakdown */}
+                  <div className="glass-panel p-3.5 rounded-xl border border-white/10 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <TrendingUp size={15} className="text-brand-orange" />
+                        <h4 className="text-xs font-bold text-white">Engine Power Breakdown</h4>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-orange-400">
+                        {(Number(baseMiningRate) || 0.5).toFixed(2)} /hr
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between text-gray-400 text-[11px]">
+                        <span>Base {sessionDurationHours}H Rate:</span>
+                        <span className="text-white font-medium">
+                          {(Number(baseMiningRate) || 0.5).toFixed(2)} E-FORCE/hr
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-gray-400 text-[11px]">
+                        <span>Tasks Completed Boost:</span>
+                        <span className="text-orange-400 font-medium">+0.00/hr</span>
+                      </div>
+                      <div className="flex justify-between text-gray-400 text-[11px]">
+                        <span>Referrals Boost (0 friends):</span>
+                        <span className="text-green-400 font-medium">+0.00/hr</span>
+                      </div>
+                    </div>
+
+                    {/* Buttons in Preview */}
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+                      <div className="py-2 px-2 rounded-lg bg-orange-500/20 border border-orange-500/30 text-[10px] font-black text-white text-center flex items-center justify-center gap-1">
+                        <Play size={10} className="text-brand-orange fill-brand-orange" />
+                        <span>Watch Ads & Boost</span>
+                      </div>
+                      <div className="py-2 px-2 rounded-lg bg-white/10 border border-white/15 text-[10px] font-bold text-white text-center flex items-center justify-center">
+                        <span>Invite Friends (+{(Number(referralSpeedBoost) || 0.05).toFixed(2)})</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-[11px] text-gray-300">
+                    <span className="font-bold text-orange-400">💡 Instant propagation:</span> All changes saved here update in Firestore <code className="text-orange-300 font-mono">settings/config</code> and reflect on all user devices immediately.
+                  </div>
+                </div>
               </div>
             </div>
 
