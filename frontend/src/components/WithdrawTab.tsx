@@ -382,7 +382,7 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate,
             <div className="space-y-1">
               <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
                 <span>Withdrawals Temporarily Paused by Admin</span>
-                <span className="text-[10px] text-red-300 font-normal">(উইথড্র সাময়িকভাবে বন্ধ আছে)</span>
+                <span className="text-[10px] text-red-300 font-normal">(Submissions Paused)</span>
               </h4>
               <p className="text-[11px] text-gray-300 leading-relaxed">
                 The administrator has temporarily paused new withdrawal requests. Your mined tokens remain safe in your wallet balance. Submissions will be re-enabled soon.
@@ -618,7 +618,7 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate,
           {!withdrawEnabled ? (
             <>
               <AlertCircle size={16} className="text-red-400" />
-              <span>Withdrawals Disabled by Admin (উইথড্র বন্ধ আছে)</span>
+              <span>Withdrawals Disabled by Admin</span>
             </>
           ) : submitting ? (
             <>

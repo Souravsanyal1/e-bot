@@ -385,7 +385,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
       if (onSettingsUpdated) {
         onSettingsUpdated(await getAppSettings());
       }
-      alert(`Withdrawal gateway is now ${newStatus ? 'ENABLED 🟢 (উইথড্র চালু হয়েছে)' : 'TURNED OFF / PAUSED 🔴 (উইথড্র বন্ধ করা হয়েছে)'}.`);
+      alert(`Withdrawal gateway is now ${newStatus ? 'ENABLED 🟢' : 'TURNED OFF / PAUSED 🔴'}.`);
     } catch (err: any) {
       alert('Failed to update withdrawal status: ' + (err?.message || err));
     } finally {
@@ -989,7 +989,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <ArrowDownUp size={19} className="text-brand-orange" />
-                    <span>Token Swapping System Protocol (পয়েন্ট থেকে টোকেন সোয়াপ কনফিগারেশন)</span>
+                    <span>Token Swapping System Protocol (Points to E-FORCE Token Swap)</span>
                   </h3>
                   <p className="text-xs text-gray-400 mt-1">
                     Control how miners convert their mined points into E-FORCE crypto tokens, adjust conversion rate and minimum thresholds.
@@ -1002,7 +1002,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                       : 'bg-red-500/20 text-red-300 border-red-500/30 animate-pulse'
                   }`}>
                     <span className={`w-2 h-2 rounded-full ${swapEnabled ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                    <span>{swapEnabled ? 'SWAP ONLINE (চালু)' : 'SWAP PAUSED (বন্ধ)'}</span>
+                    <span>{swapEnabled ? 'SWAP ONLINE' : 'SWAP PAUSED'}</span>
                   </span>
                   <button
                     type="button"
@@ -1019,7 +1019,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     ) : (
                       <Power size={13} />
                     )}
-                    <span>{swapEnabled ? 'Pause Swap (বন্ধ করুন)' : 'Enable Swap (চালু করুন)'}</span>
+                    <span>{swapEnabled ? 'Pause Swap' : 'Enable Swap'}</span>
                   </button>
                 </div>
               </div>
@@ -1080,7 +1080,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                       ) : (
                         <Check size={16} />
                       )}
-                      <span>Save Swap Protocol (সেভ করুন)</span>
+                      <span>Save Swap Protocol</span>
                     </button>
 
                     {swapSettingsSaved && (
@@ -2063,7 +2063,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                         : 'bg-red-500/30 text-red-300 border border-red-500/50'
                     }`}>
                       <span className={`w-2 h-2 rounded-full ${withdrawEnabled ? 'bg-emerald-400' : 'bg-red-400 animate-ping'}`} />
-                      {withdrawEnabled ? 'ONLINE / ENABLED (চালু)' : 'OFFLINE / DISABLED (বন্ধ)'}
+                      {withdrawEnabled ? 'ONLINE / ENABLED' : 'OFFLINE / DISABLED'}
                     </span>
                   </div>
                   <p className="text-xs text-gray-400 mt-1">
@@ -2090,7 +2090,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                   ) : (
                     <Power size={15} />
                   )}
-                  <span>{withdrawEnabled ? 'Turn OFF Withdrawals (উইথড্র বন্ধ করুন)' : 'Turn ON Withdrawals (উইথড্র চালু করুন)'}</span>
+                  <span>{withdrawEnabled ? 'Turn OFF Withdrawals' : 'Turn ON Withdrawals'}</span>
                 </button>
               </div>
             </div>

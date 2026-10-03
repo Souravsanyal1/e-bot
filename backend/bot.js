@@ -241,7 +241,7 @@ export function initBot() {
 
         return ctx.reply(
           `⚙️ <b>Withdrawal Gateway Admin Control:</b>\n\n` +
-          `• <b>Current Status:</b> ${isEnabled ? '🟢 ACTIVE / ENABLED (চালু)' : '🔴 PAUSED / DISABLED (বন্ধ)'}\n` +
+          `• <b>Current Status:</b> ${isEnabled ? '🟢 ACTIVE / ENABLED' : '🔴 PAUSED / DISABLED'}\n` +
           `• <b>Min Withdrawal:</b> ${settings.min_withdraw_amount || 50} E-FORCE\n` +
           `• <b>Fee Rate:</b> ${settings.withdraw_fee_percent || 5}%\n\n` +
           `Tap the button below or use:\n` +
@@ -309,7 +309,7 @@ export function initBot() {
       try {
         await ctx.editMessageText(
           `⚙️ <b>Withdrawal Gateway Admin Control:</b>\n\n` +
-          `• <b>Current Status:</b> ${turnOn ? '🟢 ACTIVE / ENABLED (চালু)' : '🔴 PAUSED / DISABLED (বন্ধ)'}\n\n` +
+          `• <b>Current Status:</b> ${turnOn ? '🟢 ACTIVE / ENABLED' : '🔴 PAUSED / DISABLED'}\n\n` +
           `Status updated live across the platform and Telegram bot.`,
           { parse_mode: 'HTML', reply_markup: kb }
         );
