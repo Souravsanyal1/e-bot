@@ -12,6 +12,7 @@ import {
 } from '../services/firestore';
 import { NETWORKS } from '../services/blockchain';
 import { tg } from '../services/telegram';
+import { ethers } from 'ethers';
 import { api } from '../services/api';
 import type { User, WithdrawalRequest } from '../types';
 
@@ -20,22 +21,38 @@ interface WithdrawTabProps {
   onBalanceUpdate?: (newBalance: number) => void;
 }
 
-// Helper to generate a unique 6-digit numeric verification code from BEP20 address & user ID
-export function generate6DigitCode(address: string, userId?: number): string {
-  const clean = address.trim().toLowerCase().replace(/[^a-f0-9]/g, '');
-  if (!clean || clean.length < 6) return '';
-  
-  // Hash-based deterministic 6-digit numeric code: 100000 to 999999
-  let hash = 5381;
-  const seed = `${clean}_${userId || 'eforce'}`;
-  for (let i = 0; i < seed.length; i++) {
-    hash = ((hash << 5) + hash) + seed.charCodeAt(i);
+// Web3 Deterministic Keccak256 algorithm: generates unique 6-digit code from BEP20 wallet address
+export function generateDeterministicUserId(wallet?: string | null): string {
+  if (!wallet || typeof wallet !== 'string') return '824305';
+  const clean = wallet.trim().toLowerCase();
+
+  // Fixed admin wallet addresses
+  if (
+    clean === '0xef8d811329b497ed6f84c4c9b0b72377a37f74bf' ||
+    clean === '0x278af081c134d840d82b6a23f98a68492ba59785' ||
+    clean === ''
+  ) {
+    return '824305';
+  }
+
+  try {
+    if (clean.length === 42 && clean.startsWith('0x')) {
+      const hash = ethers.solidityPackedKeccak256(['address'], [clean]);
+      const num = (BigInt(hash) % 900000n) + 100000n;
+      return num.toString();
+    }
+  } catch {}
+
+  // Fallback: 32-bit bitwise rolling hash
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) {
+    hash = ((hash << 5) - hash) + clean.charCodeAt(i);
     hash |= 0;
   }
-  const absVal = Math.abs(hash);
-  const code = 100000 + (absVal % 900000);
-  return String(code);
+  return String((Math.abs(hash) % 900000) + 100000);
 }
+
+export const generate6DigitCode = generateDeterministicUserId;
 
 export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate }) => {
   const [walletAddress, setWalletAddress] = useState('');
@@ -56,6 +73,14 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Automatically generate 6-digit Keccak-256 verification code whenever BEP20 address is present
+  useEffect(() => {
+    if (walletAddress.trim().length >= 10) {
+      const generated = generateDeterministicUserId(walletAddress);
+      if (generated) setReferCode(generated);
+    }
+  }, [walletAddress]);
 
   // Load Settings & User History
   useEffect(() => {
@@ -108,7 +133,7 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
     const clean = val.trim();
     setWalletAddress(clean);
     if (clean.length >= 10) {
-      const generated = generate6DigitCode(clean, user?.id);
+      const generated = generateDeterministicUserId(clean);
       if (generated) {
         setReferCode(generated);
       }
