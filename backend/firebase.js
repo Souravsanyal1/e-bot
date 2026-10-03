@@ -194,16 +194,26 @@ export const firestoreDB = {
   },
 
   // --- REFERRALS ---
-  async addReferral(referrerId, referredId, bonusCoins, speedBoost) {
+  async addReferral(referrerId, referredId, bonusCoins, speedBoost, referredName = 'Miner', referredUsername = '') {
     const docId = `${referrerId}_${referredId}`;
     const ref = doc(firestore, 'referrals', docId);
     await setDoc(ref, {
+      id: docId,
       referrer_id: Number(referrerId),
       referred_id: Number(referredId),
+      referred_name: referredName,
+      referred_username: referredUsername,
       bonus_coins: Number(bonusCoins),
       speed_boost: Number(speedBoost),
       created_at: new Date().toISOString()
     });
+  },
+
+  async hasReferral(referrerId, referredId) {
+    const docId = `${referrerId}_${referredId}`;
+    const ref = doc(firestore, 'referrals', docId);
+    const snap = await getDoc(ref);
+    return snap.exists();
   },
 
   async getReferrals(referrerId) {

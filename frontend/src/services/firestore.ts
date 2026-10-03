@@ -181,6 +181,85 @@ export async function saveUserForceJoined(userId: number): Promise<void> {
   }, { merge: true });
 }
 
+// Helper to credit referral bonus and speed boost in Cloud Firestore
+export async function processReferralReward(
+  referrerId: number,
+  referredUser: { id: number; first_name?: string; username?: string },
+  configuredRefBonus: number = REFERRAL_COIN_BONUS,
+  configuredRefBoost: number = REFERRAL_SPEED_BOOST,
+  configuredBaseRate: number = BASE_MINING_RATE
+): Promise<boolean> {
+  const refIdNum = Number(referrerId);
+  const referredIdNum = Number(referredUser.id);
+  if (!refIdNum || isNaN(refIdNum) || refIdNum === referredIdNum) {
+    return false;
+  }
+
+  const refDocId = `${refIdNum}_${referredIdNum}`;
+  const referralRef = doc(db, 'referrals', refDocId);
+  const referralSnap = await getDoc(referralRef);
+
+  // If already recorded and rewarded, do not duplicate
+  if (referralSnap.exists()) {
+    return false;
+  }
+
+  // Fetch referrer profile
+  const refUserRef = doc(db, 'users', String(refIdNum));
+  const refUserSnap = await getDoc(refUserRef);
+
+  if (refUserSnap.exists()) {
+    const currentRefData = refUserSnap.data();
+    const newSpeed = Number((Number(currentRefData.speed_per_hr || configuredBaseRate) + configuredRefBoost).toFixed(4));
+    const newBalance = Number((Number(currentRefData.balance || 0) + configuredRefBonus).toFixed(4));
+    const newCount = Number(currentRefData.referral_count || 0) + 1;
+
+    // 1. Credit referrer in Cloud Firestore
+    await setDoc(refUserRef, {
+      referral_count: newCount,
+      speed_per_hr: newSpeed,
+      balance: newBalance,
+      updated_at: new Date().toISOString()
+    }, { merge: true });
+
+    // 2. Add document to referrals collection
+    await setDoc(referralRef, {
+      id: refDocId,
+      referrer_id: refIdNum,
+      referred_id: referredIdNum,
+      referred_name: referredUser.first_name || 'Miner',
+      referred_username: referredUser.username || '',
+      bonus_coins: configuredRefBonus,
+      speed_boost: configuredRefBoost,
+      created_at: new Date().toISOString()
+    });
+
+    // 3. Send Telegram bot notification to referrer
+    try {
+      const msg = 
+        `🎉 <b>New Referral Joined!</b>\n\n` +
+        `<b>${referredUser.first_name || 'Miner'}</b> (@${referredUser.username || 'hidden'}) just started mining using your link!\n\n` +
+        `⚡ <b>Rewards Unlocked:</b>\n` +
+        `• +${configuredRefBoost} E-FORCE/hr Mining Speed Boost\n` +
+        `• +${configuredRefBonus} E-FORCE Instant Bonus\n\n` +
+        `Keep sharing to accelerate your 24H mining output! 🚀`;
+
+      fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: refIdNum,
+          text: msg,
+          parse_mode: 'HTML'
+        })
+      }).catch(() => {});
+    } catch (_) {}
+
+    return true;
+  }
+  return false;
+}
+
 // 1. Sync / Initialize User in Cloud Firestore with Anti-Cheat Security Audit
 export async function syncUserFirestore(
   tgUser: { id: number; username?: string; first_name?: string; last_name?: string },
@@ -243,37 +322,29 @@ export async function syncUserFirestore(
 
     // Process referral reward if joined via valid referrer link
     if (validRef) {
-      try {
-        const refRef = doc(db, 'users', String(validRef));
-        const refSnap = await getDoc(refRef);
-        if (refSnap.exists()) {
-          const currentRefData = refSnap.data();
-          const newSpeed = Number(currentRefData.speed_per_hr || configuredBaseRate) + configuredRefBoost;
-          const newBalance = Number(currentRefData.balance || 0) + configuredRefBonus;
-          const newCount = Number(currentRefData.referral_count || 0) + 1;
-
-          await setDoc(refRef, {
-            referral_count: newCount,
-            speed_per_hr: newSpeed,
-            balance: newBalance,
-            updated_at: new Date().toISOString()
-          }, { merge: true });
-
-          // Record in referrals collection
-          await setDoc(doc(db, 'referrals', `${validRef}_${tgUser.id}`), {
-            referrer_id: validRef,
-            referred_id: tgUser.id,
-            bonus_coins: configuredRefBonus,
-            speed_boost: configuredRefBoost,
-            created_at: new Date().toISOString()
-          });
-        }
-      } catch (err) {
-        console.warn('Referral credit error:', err);
-      }
+      await processReferralReward(validRef, tgUser, configuredRefBonus, configuredRefBoost, configuredBaseRate);
+      try { localStorage.removeItem('eforce_pending_ref'); } catch {}
     }
   } else {
     userData = userSnap.data();
+
+    // Check if user was referred or has pending referral to link
+    const effectiveRef = (referrerId && Number(referrerId) !== tgUser.id)
+      ? Number(referrerId)
+      : (userData.referred_by ? Number(userData.referred_by) : null);
+
+    if (effectiveRef && effectiveRef !== tgUser.id) {
+      const wasRewarded = await processReferralReward(effectiveRef, tgUser, configuredRefBonus, configuredRefBoost, configuredBaseRate);
+      if (wasRewarded || (!userData.referred_by && effectiveRef)) {
+        userData.referred_by = effectiveRef;
+        await setDoc(userRef, {
+          referred_by: effectiveRef,
+          updated_at: new Date().toISOString()
+        }, { merge: true });
+      }
+      try { localStorage.removeItem('eforce_pending_ref'); } catch {}
+    }
+
     // Update name/username in case changed
     if (tgUser.username !== userData.username || tgUser.first_name !== userData.first_name) {
       await setDoc(userRef, {
@@ -685,32 +756,49 @@ export async function getLeaderboardFirestore(): Promise<{ topMiners: Leaderboar
 // 7. Fetch Referrals from Cloud Firestore
 export async function getReferralsFirestore(userId: number): Promise<ReferralData> {
   const userIdStr = String(userId);
-  const userRef = doc(db, 'users', userIdStr);
-  const userSnap = await getDoc(userRef);
-  const userData = userSnap.exists() ? userSnap.data() : {};
+  const userIdNum = Number(userId);
 
-  const q = query(collection(db, 'referrals'), where('referrer_id', '==', Number(userId)), limit(100));
-  const snap = await getDocs(q);
+  const [userSnap, numSnap, strSnap, settings] = await Promise.all([
+    getDoc(doc(db, 'users', userIdStr)).catch(() => null),
+    getDocs(query(collection(db, 'referrals'), where('referrer_id', '==', userIdNum), limit(100))).catch(() => ({ docs: [] } as any)),
+    getDocs(query(collection(db, 'referrals'), where('referrer_id', '==', userIdStr), limit(100))).catch(() => ({ docs: [] } as any)),
+    getAppSettings().catch(() => ({} as any))
+  ]);
 
-  const friends = snap.docs.map(d => {
+  const userData = userSnap && userSnap.exists() ? userSnap.data() : {};
+  const refBoost = settings?.referral_speed_boost !== undefined ? Number(settings.referral_speed_boost) : REFERRAL_SPEED_BOOST;
+  const refBonus = settings?.referral_coin_bonus !== undefined ? Number(settings.referral_coin_bonus) : REFERRAL_COIN_BONUS;
+
+  // Deduplicate referral docs
+  const seenIds = new Set<string>();
+  const combinedDocs = [...(numSnap?.docs || []), ...(strSnap?.docs || [])].filter(d => {
+    if (seenIds.has(d.id)) return false;
+    seenIds.add(d.id);
+    return true;
+  });
+
+  const friends = combinedDocs.map(d => {
     const data = d.data();
+    const name = data.referred_name || (data.referred_username ? `@${data.referred_username}` : `Miner #${data.referred_id}`);
     return {
-      name: `Miner #${data.referred_id}`,
-      username: '',
+      name,
+      username: data.referred_username || '',
       joined_at: data.created_at,
-      bonus_coins: Number(data.bonus_coins || REFERRAL_COIN_BONUS),
-      speed_boost: Number(data.speed_boost || REFERRAL_SPEED_BOOST)
+      bonus_coins: Number(data.bonus_coins || refBonus),
+      speed_boost: Number(data.speed_boost || refBoost)
     };
   });
 
+  const totalInvited = Math.max(Number(userData.referral_count || 0), friends.length);
+  const totalBoostEarned = Number((totalInvited * refBoost).toFixed(2));
   const referralLink = `https://t.me/Elite_Force_Official_Mining_bot?start=ref_${userId}`;
 
   return {
     referral_link: referralLink,
-    total_invited: Number(userData.referral_count || friends.length),
-    speed_boost_earned: Number(((userData.referral_count || friends.length) * REFERRAL_SPEED_BOOST).toFixed(2)),
-    bonus_per_friend: REFERRAL_COIN_BONUS,
-    boost_per_friend: REFERRAL_SPEED_BOOST,
+    total_invited: totalInvited,
+    speed_boost_earned: totalBoostEarned,
+    bonus_per_friend: refBonus,
+    boost_per_friend: refBoost,
     friends
   };
 }

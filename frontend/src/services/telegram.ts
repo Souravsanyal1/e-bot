@@ -56,6 +56,46 @@ export const tg = {
     return this.WebApp?.initData || '';
   },
 
+  getStartParam(): string {
+    const app = this.WebApp;
+    // 1. Direct Telegram WebApp start_param from initDataUnsafe
+    if (app?.initDataUnsafe?.start_param) {
+      return String(app.initDataUnsafe.start_param).trim();
+    }
+
+    // 2. Query parameters in URL (search)
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const queryParam = 
+        searchParams.get('tgWebAppStartParam') || 
+        searchParams.get('startapp') || 
+        searchParams.get('start') || 
+        searchParams.get('ref') || '';
+      if (queryParam) return queryParam.trim();
+    } catch {}
+
+    // 3. Hash parameters in URL
+    try {
+      if (window.location.hash) {
+        const hashClean = window.location.hash.replace(/^#\/?/, '');
+        const hashParams = new URLSearchParams(hashClean);
+        const hashParam = 
+          hashParams.get('tgWebAppStartParam') || 
+          hashParams.get('startapp') || 
+          hashParams.get('start') || 
+          hashParams.get('ref') || '';
+        if (hashParam) return hashParam.trim();
+      }
+    } catch {}
+
+    // 4. Stored session fallback
+    try {
+      return localStorage.getItem('eforce_pending_ref') || '';
+    } catch {
+      return '';
+    }
+  },
+
   haptic: {
     impact(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' = 'medium') {
       try {

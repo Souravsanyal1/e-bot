@@ -73,19 +73,25 @@ export const App: React.FC = () => {
     getAppSettings().then(setAppSettings).catch(() => {});
     const unsubSettings = subscribeToAppSettingsFirestore(setAppSettings);
 
-    // Check referral query param
-    const searchParams = new URLSearchParams(window.location.search);
-    const startParam = searchParams.get('tgWebAppStartParam') || searchParams.get('startapp') || '';
+    // Check referral param from Telegram WebApp initData, URL search, or hash
+    const startParam = tg.getStartParam();
     let parsedRefId: number | undefined;
-    if (startParam.startsWith('ref_')) {
-      const parsed = parseInt(startParam.replace('ref_', ''), 10);
-      if (!isNaN(parsed)) parsedRefId = parsed;
+    if (startParam) {
+      const cleanParam = startParam.replace(/^ref_/, '');
+      const parsed = parseInt(cleanParam, 10);
+      if (!isNaN(parsed) && parsed > 0 && parsed !== tg.getUser().id) {
+        parsedRefId = parsed;
+        try {
+          localStorage.setItem('eforce_pending_ref', `ref_${parsed}`);
+        } catch {}
+      }
     }
     if (parsedRefId) {
       setReferrerId(parsedRefId);
     }
 
     // Check if accessing admin route
+    const searchParams = new URLSearchParams(window.location.search);
     const hasAdminParam = searchParams.get('admin') === 'true' || window.location.hash.includes('admin');
     if (hasAdminParam) {
       setCurrentTab('admin');

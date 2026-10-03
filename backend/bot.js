@@ -35,89 +35,126 @@ export function initBot() {
         }
       }
 
-      // Check if user already exists
-      let existingUser = await db.get('SELECT * FROM users WHERE id = $1', [userId]);
+      // Check if user already exists in SQLite and Cloud Firestore
+      let existingSqliteUser = null;
+      try {
+        existingSqliteUser = await db.get('SELECT * FROM users WHERE id = $1', [userId]);
+      } catch (_) {}
 
-      if (!existingUser) {
-        // Register new user in SQLite
-        await db.run(`
-          INSERT INTO users (id, username, first_name, last_name, balance, speed_per_hr, referred_by)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
-        `, [userId, username, firstName, lastName, 0.0, config.BASE_MINING_RATE, referrerId]);
+      let existingFirestoreUser = await firestoreDB.getUser(userId);
 
-        // Register new user in Cloud Firestore
+      // Determine effective referrer
+      const effectiveReferrerId = referrerId || existingFirestoreUser?.referred_by || existingSqliteUser?.referred_by || null;
+
+      // 1. Ensure user is registered in SQLite
+      if (!existingSqliteUser) {
         try {
-          await firestoreDB.setUser(userId, {
-            username,
-            first_name: firstName,
-            last_name: lastName,
+          await db.run(`
+            INSERT INTO users (id, username, first_name, last_name, balance, speed_per_hr, referred_by)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `, [userId, username, firstName, lastName, 0.0, config.BASE_MINING_RATE, effectiveReferrerId]);
+        } catch (_) {}
+      }
+
+      // 2. Ensure user is registered/updated in Cloud Firestore
+      try {
+        await firestoreDB.setUser(userId, {
+          username,
+          first_name: firstName,
+          last_name: lastName,
+          has_started_bot: true,
+          ...(existingFirestoreUser ? {} : {
             balance: 0.0,
             speed_per_hr: config.BASE_MINING_RATE,
-            referral_count: 0,
-            referred_by: referrerId,
-            is_banned: false
-          });
-        } catch (fErr) {
-          console.warn('Firestore bot sync error:', fErr.message);
-        }
+            referral_count: 0
+          }),
+          ...(effectiveReferrerId ? { referred_by: effectiveReferrerId } : {}),
+          is_banned: false
+        });
+      } catch (fErr) {
+        console.warn('Firestore bot sync error:', fErr.message);
+      }
 
-        // Process referral if applicable
-        if (referrerId) {
-          const referrer = await db.get('SELECT * FROM users WHERE id = $1', [referrerId]);
-          if (referrer) {
-            // Give referrer speed boost + bonus coins
-            const newReferralCount = (referrer.referral_count || 0) + 1;
-            const newSpeed = Number(referrer.speed_per_hr || config.BASE_MINING_RATE) + config.REFERRAL_SPEED_BOOST;
-            const newBalance = Number(referrer.balance || 0) + config.REFERRAL_COIN_BONUS;
-
-            await db.run(`
-              UPDATE users 
-              SET referral_count = $1, speed_per_hr = $2, balance = $3 
-              WHERE id = $4
-            `, [newReferralCount, newSpeed, newBalance, referrerId]);
-
-            // Record referral log
-            await db.run(`
-              INSERT INTO referrals (referrer_id, referred_id, bonus_coins, speed_boost)
-              VALUES ($1, $2, $3, $4)
-            `, [referrerId, userId, config.REFERRAL_COIN_BONUS, config.REFERRAL_SPEED_BOOST]);
-
-            // Record in Cloud Firestore
+      // 3. Process referral reward if effectiveReferrerId is valid
+      if (effectiveReferrerId && effectiveReferrerId !== userId) {
+        try {
+          const alreadyReferred = await firestoreDB.hasReferral(effectiveReferrerId, userId);
+          if (!alreadyReferred) {
+            // Fetch referrer from Firestore first, then fallback to SQLite
+            const referrerFirestore = await firestoreDB.getUser(effectiveReferrerId);
+            let referrerSqlite = null;
             try {
-              await firestoreDB.setUser(referrerId, {
+              referrerSqlite = await db.get('SELECT * FROM users WHERE id = $1', [effectiveReferrerId]);
+            } catch (_) {}
+
+            if (referrerFirestore || referrerSqlite) {
+              const currentCount = Number(referrerFirestore?.referral_count || referrerSqlite?.referral_count || 0);
+              const currentSpeed = Number(referrerFirestore?.speed_per_hr || referrerSqlite?.speed_per_hr || config.BASE_MINING_RATE);
+              const currentBal = Number(referrerFirestore?.balance || referrerSqlite?.balance || 0);
+
+              const newReferralCount = currentCount + 1;
+              const newSpeed = Number((currentSpeed + config.REFERRAL_SPEED_BOOST).toFixed(4));
+              const newBalance = Number((currentBal + config.REFERRAL_COIN_BONUS).toFixed(4));
+
+              // Update Cloud Firestore
+              await firestoreDB.setUser(effectiveReferrerId, {
                 referral_count: newReferralCount,
                 speed_per_hr: newSpeed,
                 balance: newBalance
               });
-              await firestoreDB.addReferral(referrerId, userId, config.REFERRAL_COIN_BONUS, config.REFERRAL_SPEED_BOOST);
-            } catch (fErr) {
-              console.warn('Firestore referral sync error:', fErr.message);
-            }
-
-            // Send instant DM notification to referrer
-            try {
-              await bot.api.sendMessage(
-                referrerId,
-                `🎉 <b>New Referral Joined!</b>\n\n` +
-                `<b>${firstName}</b> (@${username || 'hidden'}) just started mining using your link!\n\n` +
-                `⚡ <b>Rewards Unlocked:</b>\n` +
-                `• +${config.REFERRAL_SPEED_BOOST} E-FORCE/hr Mining Speed Boost\n` +
-                `• +${config.REFERRAL_COIN_BONUS} E-FORCE Instant Bonus\n\n` +
-                `Keep sharing to accelerate your 24H mining output! 🚀`,
-                { parse_mode: 'HTML' }
+              await firestoreDB.addReferral(
+                effectiveReferrerId, 
+                userId, 
+                config.REFERRAL_COIN_BONUS, 
+                config.REFERRAL_SPEED_BOOST,
+                firstName || 'Miner',
+                username || ''
               );
-            } catch (err) {
-              console.warn(`Could not send referral notification to ${referrerId}:`, err.message);
+
+              // Update SQLite if available
+              try {
+                await db.run(`
+                  UPDATE users 
+                  SET referral_count = $1, speed_per_hr = $2, balance = $3 
+                  WHERE id = $4
+                `, [newReferralCount, newSpeed, newBalance, effectiveReferrerId]);
+
+                await db.run(`
+                  INSERT INTO referrals (referrer_id, referred_id, bonus_coins, speed_boost)
+                  VALUES ($1, $2, $3, $4)
+                `, [effectiveReferrerId, userId, config.REFERRAL_COIN_BONUS, config.REFERRAL_SPEED_BOOST]);
+              } catch (_) {}
+
+              // Send instant DM notification to referrer
+              try {
+                await bot.api.sendMessage(
+                  effectiveReferrerId,
+                  `🎉 <b>New Referral Joined!</b>\n\n` +
+                  `<b>${firstName || 'Miner'}</b> (@${username || 'hidden'}) just started mining using your link!\n\n` +
+                  `⚡ <b>Rewards Unlocked:</b>\n` +
+                  `• +${config.REFERRAL_SPEED_BOOST} E-FORCE/hr Mining Speed Boost\n` +
+                  `• +${config.REFERRAL_COIN_BONUS} E-FORCE Instant Bonus\n\n` +
+                  `Keep sharing to accelerate your 24H mining output! 🚀`,
+                  { parse_mode: 'HTML' }
+                );
+              } catch (err) {
+                console.warn(`Could not send referral notification to ${effectiveReferrerId}:`, err.message);
+              }
             }
           }
+        } catch (rErr) {
+          console.warn('Bot referral credit error:', rErr);
         }
       }
 
-      // Dynamic Web App launch button (direct HTTPS URL required for Telegram webApp button)
+      // Dynamic Web App launch button with referral payload attached
       const webAppUrl = config.MINI_APP_URL || 'https://e-force-bot.web.app';
+      const launchUrl = effectiveReferrerId 
+        ? `${webAppUrl}?startapp=ref_${effectiveReferrerId}&tgWebAppStartParam=ref_${effectiveReferrerId}`
+        : webAppUrl;
 
       const keyboard = new InlineKeyboard()
-        .webApp('⚡ Launch E-FORCE App', webAppUrl);
+        .webApp('⚡ Launch E-FORCE App', launchUrl);
 
       if (config.CHANNEL_URL || config.COMMUNITY_URL) {
         keyboard.row();
@@ -325,4 +362,17 @@ export async function broadcastMessage(text, photoUrl = null) {
 
 export function getBot() {
   return bot;
+}
+
+// Auto-start bot if executed directly (e.g. node backend/bot.js or npm run bot)
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+if (process.argv[1]) {
+  try {
+    const currentFile = fileURLToPath(import.meta.url);
+    if (path.resolve(process.argv[1]) === path.resolve(currentFile)) {
+      initBot();
+    }
+  } catch (_) {}
 }
