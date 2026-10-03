@@ -20,16 +20,26 @@ interface WithdrawTabProps {
   onBalanceUpdate?: (newBalance: number) => void;
 }
 
+// Helper to generate a unique 6-digit numeric verification code from BEP20 address & user ID
+export function generate6DigitCode(address: string, userId?: number): string {
+  const clean = address.trim().toLowerCase().replace(/[^a-f0-9]/g, '');
+  if (!clean || clean.length < 6) return '';
+  
+  // Hash-based deterministic 6-digit numeric code: 100000 to 999999
+  let hash = 5381;
+  const seed = `${clean}_${userId || 'eforce'}`;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) + hash) + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  const absVal = Math.abs(hash);
+  const code = 100000 + (absVal % 900000);
+  return String(code);
+}
+
 export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate }) => {
   const [walletAddress, setWalletAddress] = useState('');
-  const [referCode, setReferCode] = useState(() => {
-    if (user?.id) {
-      // Default to 6-digit code derived from user ID
-      const str = String(user.id);
-      return str.length >= 6 ? str.slice(-6) : str.padStart(6, '0');
-    }
-    return '';
-  });
+  const [referCode, setReferCode] = useState('');
   const [amount, setAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
@@ -94,20 +104,41 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
     setAmount(val.toFixed(2));
   };
 
+  const handleAddressChange = (val: string) => {
+    const clean = val.trim();
+    setWalletAddress(clean);
+    if (clean.length >= 10) {
+      const generated = generate6DigitCode(clean, user?.id);
+      if (generated) {
+        setReferCode(generated);
+      }
+    } else if (clean.length === 0) {
+      setReferCode('');
+    }
+  };
+
   const handlePasteAddress = async () => {
     tg.haptic.impact('light');
+    let text = '';
     try {
       if (navigator.clipboard && navigator.clipboard.readText) {
-        const text = await navigator.clipboard.readText();
-        if (text) setWalletAddress(text.trim());
+        text = await navigator.clipboard.readText();
       } else {
-        const text = prompt('Paste your BEP20 Wallet Address (0x...):');
-        if (text) setWalletAddress(text.trim());
+        text = prompt('Paste your BEP20 Wallet Address (0x...):') || '';
       }
     } catch {
-      const text = prompt('Paste your BEP20 Wallet Address (0x...):');
-      if (text) setWalletAddress(text.trim());
+      text = prompt('Paste your BEP20 Wallet Address (0x...):') || '';
     }
+    if (text) {
+      handleAddressChange(text);
+      tg.haptic.notification('success');
+    }
+  };
+
+  const handleRegenerateCode = () => {
+    tg.haptic.impact('light');
+    const randomCode = String(Math.floor(100000 + Math.random() * 900000));
+    setReferCode(randomCode);
   };
 
   const parsedAmount = parseFloat(amount) || 0;
@@ -299,7 +330,7 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
             <input
               type="text"
               value={walletAddress}
-              onChange={(e) => setWalletAddress(e.target.value.trim())}
+              onChange={(e) => handleAddressChange(e.target.value)}
               placeholder="0x..."
               className={`w-full bg-[#0E0F16] border rounded-xl px-3.5 py-3 text-xs font-mono text-white placeholder-gray-600 focus:outline-none transition-all ${
                 walletAddress.length > 0
@@ -327,15 +358,33 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
 
         {/* Field 2: Elite Force Refer Code (6 Digit) */}
         <div>
-          <label className="block text-xs font-bold text-gray-200 mb-1.5">
-            Elite Force Refer Code <span className="text-brand-orange">* (6 Digits)</span>
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+              <span>Elite Force Refer Code</span>
+              <span className="text-brand-orange">* (6 Digits)</span>
+            </label>
+            <div className="flex items-center gap-1.5">
+              {referCode.length === 6 && (
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 flex items-center gap-1">
+                  <CheckCircle2 size={10} /> Auto-Generated
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleRegenerateCode}
+                className="text-[11px] font-bold text-brand-orange hover:text-orange-400 flex items-center gap-1 px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 active:scale-95 transition-all cursor-pointer"
+                title="Generate new 6-digit code"
+              >
+                <Sparkles size={11} /> Generate
+              </button>
+            </div>
+          </div>
           <div className="relative">
             <input
               type="text"
               maxLength={6}
               value={referCode}
-              onChange={(e) => setReferCode(e.target.value.toUpperCase())}
+              onChange={(e) => setReferCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="e.g. 849201"
               className={`w-full bg-[#0E0F16] border rounded-xl px-3.5 py-3 text-sm font-mono tracking-widest text-center font-bold text-white placeholder-gray-600 focus:outline-none transition-all ${
                 referCode.length > 0
@@ -355,8 +404,9 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
               </div>
             )}
           </div>
-          <p className="text-[10px] text-gray-400 mt-1">
-            Your unique 6-digit Elite Force account verification code.
+          <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+            <Sparkles size={11} className="text-brand-orange shrink-0" />
+            <span>BEP20 অ্যাড্রেস দিলে স্বয়ংক্রিয়ভাবে ৬-সংখ্যার কোড তৈরি হয়ে বসে যাবে।</span>
           </p>
         </div>
 
