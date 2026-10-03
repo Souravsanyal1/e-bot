@@ -6,7 +6,7 @@ import {
   ExternalLink, Ban, Sparkles, MessageSquare,
   Sliders, Wallet, Copy, Check, XCircle, Clock,
   Eye, EyeOff, Cpu, Play, TrendingUp, Gauge,
-  ShieldCheck, Network, Smartphone, Lock, Power
+  ShieldCheck, Network, Smartphone, Lock, Power, ArrowDownUp
 } from 'lucide-react';
 import { 
   getAdminStatsFirestore, 
@@ -22,6 +22,7 @@ import {
   getAllWithdrawalsFirestore,
   adminUpdateWithdrawalStatusFirestore,
   clearAllUserDataFirestore,
+  updateSwapSettingsFirestore,
   DEFAULT_FORCE_JOIN_ITEMS
 } from '../services/firestore';
 import { 
@@ -120,6 +121,14 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
   const [savingAntiCheat, setSavingAntiCheat] = useState(false);
   const [antiCheatSaved, setAntiCheatSaved] = useState(false);
 
+  // Token Swapping Protocol State
+  const [swapEnabled, setSwapEnabled] = useState<boolean>(true);
+  const [swapRate, setSwapRate] = useState<number>(1000);
+  const [minSwapPoints, setMinSwapPoints] = useState<number>(1000);
+  const [savingSwapSettings, setSavingSwapSettings] = useState(false);
+  const [swapSettingsSaved, setSwapSettingsSaved] = useState(false);
+  const [savingSwapToggle, setSavingSwapToggle] = useState(false);
+
   // Force Joining System State
   const [forceJoinEnabled, setForceJoinEnabled] = useState(true);
   const [forceJoinItems, setForceJoinItems] = useState<ForceJoinItem[]>(DEFAULT_FORCE_JOIN_ITEMS);
@@ -176,6 +185,10 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
           ? appSettings.force_join_items
           : DEFAULT_FORCE_JOIN_ITEMS
       );
+
+      setSwapEnabled(appSettings.swap_enabled !== false);
+      setSwapRate(appSettings.swap_rate !== undefined ? Number(appSettings.swap_rate) : 1000);
+      setMinSwapPoints(appSettings.min_swap_points !== undefined ? Number(appSettings.min_swap_points) : 1000);
     } catch (err: any) {
       console.warn('Admin load error:', err);
     } finally {
@@ -244,6 +257,48 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
 
   const handleUpdateForceJoinItem = (id: string, updates: Partial<ForceJoinItem>) => {
     setForceJoinItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+  };
+
+  const handleSaveSwapSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSwapSettings(true);
+    setSwapSettingsSaved(false);
+    try {
+      await updateSwapSettingsFirestore({
+        swap_enabled: swapEnabled,
+        swap_rate: Number(swapRate) || 1000,
+        min_swap_points: Number(minSwapPoints) || 1000
+      });
+      setSwapSettingsSaved(true);
+      if (onSettingsUpdated) {
+        onSettingsUpdated(await getAppSettings());
+      }
+      setTimeout(() => setSwapSettingsSaved(false), 3000);
+    } catch (err: any) {
+      alert('Error saving swap settings: ' + err.message);
+    } finally {
+      setSavingSwapSettings(false);
+    }
+  };
+
+  const handleToggleSwapStatus = async () => {
+    const nextStatus = !swapEnabled;
+    setSavingSwapToggle(true);
+    try {
+      await updateSwapSettingsFirestore({
+        swap_enabled: nextStatus,
+        swap_rate: Number(swapRate) || 1000,
+        min_swap_points: Number(minSwapPoints) || 1000
+      });
+      setSwapEnabled(nextStatus);
+      if (onSettingsUpdated) {
+        onSettingsUpdated(await getAppSettings());
+      }
+    } catch (err: any) {
+      alert('Error toggling swap status: ' + err.message);
+    } finally {
+      setSavingSwapToggle(false);
+    }
   };
 
   const handleSaveMiningSettings = async (e: React.FormEvent) => {
@@ -925,6 +980,145 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                   <Send size={16} />
                   <span>Open Telegram Bot Broadcast Studio</span>
                 </button>
+              </div>
+            </div>
+
+            {/* Token Swapping System Protocol Configuration Panel */}
+            <div className="glass-panel p-6 rounded-2xl border border-orange-500/30 shadow-orange-glow mt-6 bg-gradient-to-b from-orange-500/5 via-transparent to-transparent">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <ArrowDownUp size={19} className="text-brand-orange" />
+                    <span>Token Swapping System Protocol (পয়েন্ট থেকে টোকেন সোয়াপ কনফিগারেশন)</span>
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Control how miners convert their mined points into E-FORCE crypto tokens, adjust conversion rate and minimum thresholds.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold border flex items-center gap-1.5 ${
+                    swapEnabled 
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' 
+                      : 'bg-red-500/20 text-red-300 border-red-500/30 animate-pulse'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${swapEnabled ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                    <span>{swapEnabled ? 'SWAP ONLINE (চালু)' : 'SWAP PAUSED (বন্ধ)'}</span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={savingSwapToggle}
+                    onClick={handleToggleSwapStatus}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                      swapEnabled
+                        ? 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30'
+                        : 'bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold'
+                    }`}
+                  >
+                    {savingSwapToggle ? (
+                      <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Power size={13} />
+                    )}
+                    <span>{swapEnabled ? 'Pause Swap (বন্ধ করুন)' : 'Enable Swap (চালু করুন)'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Form Inputs (Left) */}
+                <form onSubmit={handleSaveSwapSettings} className="lg:col-span-7 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Points per 1 E-FORCE Token */}
+                    <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
+                      <label className="text-xs text-gray-300 font-bold block flex items-center gap-1.5">
+                        <ArrowDownUp size={14} className="text-brand-orange" />
+                        <span>Swap Rate (Points per 1 Token)</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={swapRate}
+                        onChange={(e) => setSwapRate(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-orange font-mono font-bold"
+                        required
+                      />
+                      <p className="text-[11px] text-gray-400">
+                        How many points = 1 E-FORCE token (e.g. 1000 points = 1 token).
+                      </p>
+                    </div>
+
+                    {/* Minimum Points Required to Swap */}
+                    <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
+                      <label className="text-xs text-gray-300 font-bold block flex items-center gap-1.5">
+                        <Coins size={14} className="text-amber-400" />
+                        <span>Min Swap Points Threshold</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="100"
+                        min="100"
+                        value={minSwapPoints}
+                        onChange={(e) => setMinSwapPoints(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-orange font-mono font-bold"
+                        required
+                      />
+                      <p className="text-[11px] text-gray-400">
+                        Minimum points a user must have and provide to execute a swap.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={savingSwapSettings}
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-orange to-orange-500 hover:brightness-110 text-white font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 shadow-orange-glow transition-all disabled:opacity-50"
+                    >
+                      {savingSwapSettings ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Check size={16} />
+                      )}
+                      <span>Save Swap Protocol (সেভ করুন)</span>
+                    </button>
+
+                    {swapSettingsSaved && (
+                      <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5 animate-pulse">
+                        <CheckCircle2 size={15} />
+                        <span>Swapping settings updated & live!</span>
+                      </span>
+                    )}
+                  </div>
+                </form>
+
+                {/* Live Simulation Card (Right) */}
+                <div className="lg:col-span-5 p-4 rounded-xl bg-black/40 border border-white/10 space-y-3">
+                  <div className="flex items-center justify-between text-xs border-b border-white/10 pb-2">
+                    <span className="font-bold text-gray-300 flex items-center gap-1.5">
+                      <Sparkles size={14} className="text-amber-400" />
+                      <span>Live Swap Simulation</span>
+                    </span>
+                    <span className="text-[10px] text-brand-orange font-mono font-bold">
+                      1 Token = {swapRate.toLocaleString()} PTS
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs font-mono">
+                    {[1000, 5000, 20000, 50000].map((sample) => (
+                      <div key={sample} className="flex items-center justify-between p-2 rounded-lg bg-white/5">
+                        <span className="text-gray-400">{sample.toLocaleString()} Points</span>
+                        <span className="text-brand-orange font-bold">
+                          = {swapRate > 0 ? (sample / swapRate).toFixed(4) : '0.0000'} E-FORCE
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="text-[11px] text-gray-500 pt-1">
+                    Miners will see this real-time rate on the <strong>Swap</strong> tab and can convert points with 1 tap.
+                  </div>
+                </div>
               </div>
             </div>
 

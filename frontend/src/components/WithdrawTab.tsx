@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Wallet, ArrowDownToLine, AlertCircle, 
   Clock, CheckCircle2, XCircle, Copy, Check, Sparkles, 
-  RefreshCw, Info, ExternalLink
+  RefreshCw, Info, ExternalLink, ArrowRight
 } from 'lucide-react';
 import { 
   createWithdrawalFirestore, 
@@ -20,6 +20,7 @@ import type { User, WithdrawalRequest } from '../types';
 interface WithdrawTabProps {
   user: User | null;
   onBalanceUpdate?: (newBalance: number) => void;
+  onNavigateToSwap?: () => void;
 }
 
 // Web3 Deterministic Keccak256 algorithm: generates unique 6-digit code from BEP20 wallet address
@@ -55,7 +56,7 @@ export function generateDeterministicUserId(wallet?: string | null): string {
 
 export const generate6DigitCode = generateDeterministicUserId;
 
-export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate }) => {
+export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate, onNavigateToSwap }) => {
   const [walletAddress, setWalletAddress] = useState('');
   const [referCode, setReferCode] = useState('');
   const [amount, setAmount] = useState('');
@@ -129,16 +130,18 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
     }
   };
 
+  const userTokenBalance = Number(user?.eforce_balance !== undefined ? user.eforce_balance : (user?.balance || 0));
+
   const handleMaxClick = () => {
     if (!user) return;
     tg.haptic.impact('light');
-    setAmount(Math.max(0, user.balance).toFixed(2));
+    setAmount(Math.max(0, userTokenBalance).toFixed(2));
   };
 
   const handlePercentClick = (pct: number) => {
     if (!user) return;
     tg.haptic.impact('light');
-    const val = (user.balance * pct) / 100;
+    const val = (userTokenBalance * pct) / 100;
     setAmount(val.toFixed(2));
   };
 
@@ -216,8 +219,8 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
       return;
     }
 
-    if (parsedAmount > user.balance) {
-      setErrorMessage(`Insufficient balance! You have ${user.balance.toFixed(2)} E-FORCE.`);
+    if (parsedAmount > userTokenBalance) {
+      setErrorMessage(`Insufficient tokens! You have ${userTokenBalance.toFixed(2)} E-FORCE. Please swap your points in the Swap tab.`);
       tg.haptic.notification('error');
       return;
     }
@@ -312,13 +315,29 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
         </div>
 
         {/* Dedicated Available Balance Bar */}
-        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.04] border border-white/10 mb-3">
-          <span className="text-xs text-gray-400 font-medium">Available Balance</span>
-          <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-            <span className="text-lg sm:text-xl font-black font-mono text-white">
-              {(user?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-            <span className="text-xs font-black text-brand-orange">E-FORCE</span>
+        <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10 mb-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-400 font-medium">Available Tokens</span>
+            <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+              <span className="text-lg sm:text-xl font-black font-mono text-white">
+                {userTokenBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span className="text-xs font-black text-brand-orange">E-FORCE</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[11px]">
+            <span className="text-gray-500">Mined Points: <strong className="text-gray-300 font-mono">{Number(user?.balance || 0).toLocaleString()} PTS</strong></span>
+            {onNavigateToSwap && (
+              <button
+                type="button"
+                onClick={onNavigateToSwap}
+                className="text-orange-400 hover:text-orange-300 font-bold flex items-center gap-1 transition-colors"
+              >
+                <span>Swap Points</span>
+                <ArrowRight size={11} />
+              </button>
+            )}
           </div>
         </div>
 

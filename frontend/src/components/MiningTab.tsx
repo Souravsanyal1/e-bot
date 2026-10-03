@@ -14,6 +14,7 @@ interface MiningTabProps {
   onClaimMining: () => Promise<void>;
   onNavigateToTasks: () => void;
   onNavigateToFriends: () => void;
+  onNavigateToSwap?: () => void;
 }
 
 export const MiningTab: React.FC<MiningTabProps> = ({
@@ -24,6 +25,7 @@ export const MiningTab: React.FC<MiningTabProps> = ({
   onClaimMining,
   onNavigateToTasks,
   onNavigateToFriends,
+  onNavigateToSwap,
 }) => {
   const baseRate = appSettings?.base_mining_rate ?? 0.5;
   const refBoostRate = appSettings?.referral_speed_boost ?? 0.05;
@@ -139,19 +141,26 @@ export const MiningTab: React.FC<MiningTabProps> = ({
         </span>
       </motion.div>
 
-      {/* Main Balance Display */}
+      {/* Main Points Balance Display */}
       <div className="text-center my-3">
-        <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1 flex items-center justify-center gap-1">
-          <img src="/canva.png" alt="E-FORCE" className="w-4 h-4 rounded-full object-contain" />
-          <span>Total Balance</span>
+        <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1 flex items-center justify-center gap-1.5">
+          <Zap size={14} className="text-brand-orange fill-brand-orange" />
+          <span>Mined Points Balance</span>
         </div>
         <motion.div
           key={Math.floor(totalBalance)}
           className="text-4xl sm:text-5xl font-black tracking-tight fire-text-gradient font-mono"
         >
-          {totalBalance.toFixed(4)}
+          {totalBalance.toFixed(2)}
         </motion.div>
-        <span className="text-xs font-bold text-orange-400/90 tracking-widest uppercase">E-FORCE</span>
+        <div className="flex items-center justify-center gap-1.5 mt-0.5">
+          <span className="text-xs font-bold text-orange-400/90 tracking-widest uppercase">POINTS</span>
+          {Boolean(user?.eforce_balance) && (
+            <span className="text-[10px] text-gray-400 font-medium">
+              • {(user?.eforce_balance || 0).toFixed(2)} E-FORCE
+            </span>
+          )}
+        </div>
       </div>
 
       {/* 3D Circular Energy Reactor with Katana Video Asset */}
@@ -235,12 +244,12 @@ export const MiningTab: React.FC<MiningTabProps> = ({
         <div className="glass-panel-orange p-3 rounded-2xl flex flex-col items-center justify-center text-center">
           <div className="flex items-center gap-1.5 text-orange-300 text-xs font-medium mb-1">
             <Zap size={13} className="text-brand-orange fill-brand-orange" />
-            <span>Unclaimed Yield</span>
+            <span>Unclaimed Points</span>
           </div>
           <div className="font-mono text-lg font-bold text-brand-orange tracking-tight">
-            +{liveUnclaimed.toFixed(4)}
+            +{liveUnclaimed.toFixed(2)}
           </div>
-          <span className="text-[10px] text-orange-200/60">Ready in pool</span>
+          <span className="text-[10px] text-orange-200/60">Points in pool</span>
         </div>
       </div>
 
@@ -262,7 +271,7 @@ export const MiningTab: React.FC<MiningTabProps> = ({
         ) : isClaimable ? (
           <>
             <Award size={20} className="text-yellow-200 animate-bounce" />
-            <span>CLAIM {liveUnclaimed.toFixed(4)} E-FORCE</span>
+            <span>CLAIM {liveUnclaimed.toFixed(2)} POINTS</span>
           </>
         ) : isMining ? (
           <>
@@ -276,6 +285,35 @@ export const MiningTab: React.FC<MiningTabProps> = ({
           </>
         )}
       </motion.button>
+
+      {/* Quick Swap Gateway Card */}
+      {onNavigateToSwap && (
+        <div 
+          onClick={onNavigateToSwap}
+          className="w-full mt-3 p-3 rounded-2xl bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-transparent border border-orange-500/30 flex items-center justify-between gap-3 cursor-pointer hover:border-orange-500/50 transition-all shadow-sm"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-brand-orange/20 border border-brand-orange/40 flex items-center justify-center text-brand-orange shrink-0">
+              <Sparkles size={16} />
+            </div>
+            <div className="min-w-0 text-left">
+              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>Swap Points to E-FORCE</span>
+                <span className="text-[9px] bg-orange-500 text-black font-black px-1.5 py-0.5 rounded-full uppercase">NEW</span>
+              </div>
+              <div className="text-[10px] text-gray-400 truncate">
+                Convert your mined points to crypto tokens anytime
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="px-2.5 py-1 rounded-lg bg-brand-orange text-black font-bold text-[11px] shrink-0"
+          >
+            Swap ➔
+          </button>
+        </div>
+      )}
 
       {/* Mining Power Breakdown & Boost Boosters */}
       <div className="w-full mt-5 glass-panel p-4 rounded-2xl border border-white/10">

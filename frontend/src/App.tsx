@@ -5,6 +5,7 @@ import { BottomNav } from './components/BottomNav';
 import type { TabType } from './components/BottomNav';
 import { MiningTab } from './components/MiningTab';
 import { TasksTab } from './components/TasksTab';
+import { SwapTab } from './components/SwapTab';
 import { WithdrawTab } from './components/WithdrawTab';
 import { FriendsTab } from './components/FriendsTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
@@ -358,6 +359,7 @@ export const App: React.FC = () => {
                 onClaimMining={handleClaimMining}
                 onNavigateToTasks={() => setCurrentTab('tasks')}
                 onNavigateToFriends={() => setCurrentTab('friends')}
+                onNavigateToSwap={() => setCurrentTab('swap')}
               />
             </motion.div>
           )}
@@ -379,6 +381,23 @@ export const App: React.FC = () => {
             </motion.div>
           )}
 
+          {currentTab === 'swap' && (
+            <motion.div
+              key="swap"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <SwapTab
+                user={user}
+                appSettings={appSettings}
+                onRefresh={loadTabContent}
+                onNavigateToWithdraw={() => setCurrentTab('withdraw')}
+              />
+            </motion.div>
+          )}
+
           {currentTab === 'withdraw' && (
             <motion.div
               key="withdraw"
@@ -389,8 +408,9 @@ export const App: React.FC = () => {
             >
               <WithdrawTab
                 user={user}
+                onNavigateToSwap={() => setCurrentTab('swap')}
                 onBalanceUpdate={(newBalance) => {
-                  setUser(prev => prev ? { ...prev, balance: newBalance } : null);
+                  setUser(prev => prev ? { ...prev, eforce_balance: newBalance } : null);
                 }}
               />
             </motion.div>

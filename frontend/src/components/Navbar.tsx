@@ -50,7 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({ user, activeSpeed }) => {
           </motion.div>
           <span className="text-xs font-bold text-white tracking-tight">
             +{activeSpeed.toFixed(2)}
-            <span className="text-[10px] text-orange-300/80 font-normal"> /hr</span>
+            <span className="text-[10px] text-orange-300/80 font-normal"> pts/hr</span>
           </span>
         </motion.div>
       </div>

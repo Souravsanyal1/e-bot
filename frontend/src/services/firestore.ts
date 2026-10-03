@@ -3,16 +3,18 @@ import {
   doc, 
   getDoc, 
   setDoc, 
+  updateDoc,
+  addDoc,
   getDocs, 
   query, 
   where, 
   limit, 
-  onSnapshot,
-  deleteDoc,
-  writeBatch
+  onSnapshot, 
+  deleteDoc, 
+  writeBatch 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { User, MiningState, Task, ReferralData, LeaderboardUser, WithdrawalRequest, ForceJoinItem } from '../types';
+import type { User, MiningState, Task, ReferralData, LeaderboardUser, WithdrawalRequest, ForceJoinItem, SwapRecord } from '../types';
 
 export const BOT_TOKEN = '8826126541:AAG_8ZxcBe9zQ40wqf-bUUROZAufCt2vnqw';
 
@@ -476,6 +478,7 @@ export async function syncUserFirestore(
       username: userData.username,
       first_name: userData.first_name,
       balance: Number(userData.balance || 0),
+      eforce_balance: Number(userData.eforce_balance || 0),
       speed_per_hr: Number(userData.speed_per_hr || BASE_MINING_RATE),
       referral_count: Number(userData.referral_count || 0),
       is_admin: false,
@@ -834,6 +837,7 @@ export function subscribeToUserFirestore(userId: number, callback: (user: User) 
         username: data.username || '',
         first_name: data.first_name || 'Miner',
         balance: Number(data.balance || 0),
+        eforce_balance: Number(data.eforce_balance || 0),
         speed_per_hr: Number(data.speed_per_hr || BASE_MINING_RATE),
         referral_count: Number(data.referral_count || 0),
         is_admin: false,
@@ -1091,6 +1095,11 @@ export interface AppSettings {
   // Force Joining System Settings
   force_join_enabled?: boolean;
   force_join_items?: ForceJoinItem[];
+
+  // Token Swapping Protocol Settings
+  swap_enabled?: boolean;
+  swap_rate?: number;
+  min_swap_points?: number;
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
@@ -1129,7 +1138,12 @@ export async function getAppSettings(): Promise<AppSettings> {
         force_join_enabled: data.force_join_enabled !== undefined ? Boolean(data.force_join_enabled) : true,
         force_join_items: Array.isArray(data.force_join_items) && data.force_join_items.length > 0 
           ? data.force_join_items 
-          : DEFAULT_FORCE_JOIN_ITEMS
+          : DEFAULT_FORCE_JOIN_ITEMS,
+
+        // Token Swapping Protocol Settings
+        swap_enabled: data.swap_enabled !== false,
+        swap_rate: data.swap_rate !== undefined ? Number(data.swap_rate) : 1000,
+        min_swap_points: data.min_swap_points !== undefined ? Number(data.min_swap_points) : 1000
       };
     }
   } catch (e) {
@@ -1277,7 +1291,10 @@ export function subscribeToAppSettingsFirestore(callback: (settings: AppSettings
         force_join_enabled: data.force_join_enabled !== undefined ? Boolean(data.force_join_enabled) : true,
         force_join_items: Array.isArray(data.force_join_items) && data.force_join_items.length > 0 
           ? data.force_join_items 
-          : DEFAULT_FORCE_JOIN_ITEMS
+          : DEFAULT_FORCE_JOIN_ITEMS,
+        swap_enabled: data.swap_enabled !== false,
+        swap_rate: data.swap_rate !== undefined ? Number(data.swap_rate) : 1000,
+        min_swap_points: data.min_swap_points !== undefined ? Number(data.min_swap_points) : 1000
       };
       if (settings.withdraw_enabled !== undefined) {
         localStorage.setItem('eforce_withdraw_enabled', String(settings.withdraw_enabled));
@@ -1331,10 +1348,10 @@ export async function createWithdrawalFirestore(params: {
   }
 
   const userData = userSnap.data();
-  const currentBalance = Number(userData.balance || 0);
+  const currentBalance = Number(userData.eforce_balance !== undefined ? userData.eforce_balance : (userData.balance || 0));
 
   if (currentBalance < amount) {
-    throw new Error(`Insufficient balance! Your current balance is ${currentBalance.toFixed(4)} E-FORCE.`);
+    throw new Error(`Insufficient E-FORCE tokens! Your balance is ${currentBalance.toFixed(2)} E-FORCE. Please swap your points to E-FORCE first in the Swap tab.`);
   }
 
   // Check minimum withdrawal
@@ -1417,9 +1434,13 @@ export async function createWithdrawalFirestore(params: {
     admin_note: adminNote
   };
 
-  // 1. Deduct balance from user
+  // 1. Deduct token balance from user
   const newBalance = Number((currentBalance - amount).toFixed(4));
-  await setDoc(userRef, { balance: newBalance, updated_at: now }, { merge: true });
+  const updatePayload: any = { eforce_balance: newBalance, updated_at: now };
+  if (userData.eforce_balance === undefined) {
+    updatePayload.balance = newBalance;
+  }
+  await setDoc(userRef, updatePayload, { merge: true });
 
   // 2. Save withdrawal record
   await setDoc(doc(db, 'withdrawals', docId), withdrawal);
@@ -1498,7 +1519,7 @@ export async function adminUpdateWithdrawalStatusFirestore(
 
 // 12. Wipe/Clear All User Data from Cloud Firestore (Users, Mining Sessions, User Tasks, Referrals, Withdrawals)
 export async function clearAllUserDataFirestore(): Promise<{ success: boolean; deletedSummary: Record<string, number> }> {
-  const collectionsToWipe = ['users', 'user_tasks', 'mining_sessions', 'referrals', 'withdrawals'];
+  const collectionsToWipe = ['users', 'user_tasks', 'mining_sessions', 'referrals', 'withdrawals', 'swaps'];
   const deletedSummary: Record<string, number> = {};
 
   for (const colName of collectionsToWipe) {
@@ -1532,5 +1553,152 @@ export async function clearAllUserDataFirestore(): Promise<{ success: boolean; d
   }
 
   return { success: true, deletedSummary };
+}
+
+// ==========================================
+// 13. TOKEN SWAPPING PROTOCOL (POINTS -> E-FORCE)
+// ==========================================
+
+export async function swapPointsToTokensFirestore(userId: number, pointsToSwap: number): Promise<{
+  success: boolean;
+  pointsSwapped: number;
+  tokensReceived: number;
+  newPoints: number;
+  newTokens: number;
+}> {
+  const points = Number(pointsToSwap);
+  if (isNaN(points) || points <= 0) {
+    throw new Error('Please enter a valid points amount to swap.');
+  }
+
+  const settings = await getAppSettings();
+  if (settings.swap_enabled === false) {
+    throw new Error('Token swapping is currently paused by the administrator.');
+  }
+
+  const minPoints = settings.min_swap_points !== undefined ? Number(settings.min_swap_points) : 1000;
+  if (points < minPoints) {
+    throw new Error(`Minimum points required to swap is ${minPoints.toLocaleString()} Points.`);
+  }
+
+  const swapRate = settings.swap_rate !== undefined ? Number(settings.swap_rate) : 1000;
+  if (swapRate <= 0) {
+    throw new Error('Invalid swap rate configuration.');
+  }
+
+  const tokensToReceive = Number((points / swapRate).toFixed(4));
+  if (tokensToReceive <= 0) {
+    throw new Error('Points amount is too low to produce tokens.');
+  }
+
+  const userRef = doc(db, 'users', String(userId));
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) {
+    throw new Error('User profile not found.');
+  }
+
+  const userData = userSnap.data();
+  const currentPoints = Number(userData.balance || 0);
+
+  if (currentPoints < points) {
+    throw new Error(`Insufficient Points! You have ${currentPoints.toLocaleString()} Points, but requested to swap ${points.toLocaleString()} Points.`);
+  }
+
+  const newPoints = Number((currentPoints - points).toFixed(4));
+  const currentTokens = Number(userData.eforce_balance || 0);
+  const newTokens = Number((currentTokens + tokensToReceive).toFixed(4));
+  const now = new Date().toISOString();
+
+  // Atomically update user doc
+  await updateDoc(userRef, {
+    balance: newPoints,
+    eforce_balance: newTokens,
+    updated_at: now
+  });
+
+  // Record transaction in swaps collection
+  try {
+    await addDoc(collection(db, 'swaps'), {
+      user_id: Number(userId),
+      user_name: userData.first_name || 'Miner',
+      username: userData.username || '',
+      points_swapped: points,
+      tokens_received: tokensToReceive,
+      swap_rate: swapRate,
+      created_at: now
+    });
+  } catch (logErr) {
+    console.warn('Failed to record swap transaction log:', logErr);
+  }
+
+  return {
+    success: true,
+    pointsSwapped: points,
+    tokensReceived: tokensToReceive,
+    newPoints,
+    newTokens
+  };
+}
+
+export async function getUserSwapsFirestore(userId: number): Promise<SwapRecord[]> {
+  try {
+    const q = query(
+      collection(db, 'swaps'),
+      where('user_id', '==', Number(userId)),
+      limit(25)
+    );
+    const snap = await getDocs(q);
+    const list: SwapRecord[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      list.push({
+        id: d.id,
+        user_id: Number(data.user_id),
+        points_swapped: Number(data.points_swapped || 0),
+        tokens_received: Number(data.tokens_received || 0),
+        swap_rate: Number(data.swap_rate || 1000),
+        created_at: data.created_at || new Date().toISOString()
+      });
+    });
+    return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  } catch (e) {
+    console.warn('Failed to fetch user swaps:', e);
+    return [];
+  }
+}
+
+export async function getAllSwapsFirestore(): Promise<SwapRecord[]> {
+  try {
+    const snap = await getDocs(query(collection(db, 'swaps'), limit(100)));
+    const list: SwapRecord[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      list.push({
+        id: d.id,
+        user_id: Number(data.user_id),
+        points_swapped: Number(data.points_swapped || 0),
+        tokens_received: Number(data.tokens_received || 0),
+        swap_rate: Number(data.swap_rate || 1000),
+        created_at: data.created_at || new Date().toISOString()
+      });
+    });
+    return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  } catch (e) {
+    console.warn('Failed to fetch all swaps:', e);
+    return [];
+  }
+}
+
+export async function updateSwapSettingsFirestore(settings: {
+  swap_enabled: boolean;
+  swap_rate: number;
+  min_swap_points: number;
+}): Promise<void> {
+  await setDoc(doc(db, 'settings', 'config'), {
+    swap_enabled: settings.swap_enabled,
+    swap_rate: Number(settings.swap_rate),
+    min_swap_points: Number(settings.min_swap_points),
+    updated_at: new Date().toISOString()
+  }, { merge: true });
 }
 

@@ -3,6 +3,7 @@ export interface User {
   username: string;
   first_name: string;
   balance: number;
+  eforce_balance?: number;
   speed_per_hr: number;
   referral_count: number;
   is_admin: boolean;
@@ -110,7 +111,16 @@ export interface AdminStats {
   totalReferrals: number;
 }
 
-export type TabType = 'mining' | 'tasks' | 'withdraw' | 'friends' | 'leaderboard';
+export interface SwapRecord {
+  id: string;
+  user_id: number;
+  points_swapped: number;
+  tokens_received: number;
+  swap_rate: number;
+  created_at: string;
+}
+
+export type TabType = 'mining' | 'tasks' | 'swap' | 'withdraw' | 'friends' | 'leaderboard';
 
 declare global {
   interface Window {

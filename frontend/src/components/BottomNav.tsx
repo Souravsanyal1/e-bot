@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Pickaxe, CheckSquare, Wallet, Users, Trophy } from 'lucide-react';
+import { Pickaxe, CheckSquare, ArrowLeftRight, Wallet, Users, Trophy } from 'lucide-react';
 import { tg } from '../services/telegram';
 import type { TabType } from '../types';
 
@@ -15,6 +15,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
   const tabs = [
     { id: 'mining' as TabType, label: 'Mining', icon: Pickaxe },
     { id: 'tasks' as TabType, label: 'Tasks', icon: CheckSquare },
+    { id: 'swap' as TabType, label: 'Swap', icon: ArrowLeftRight },
     { id: 'withdraw' as TabType, label: 'Withdraw', icon: Wallet },
     { id: 'friends' as TabType, label: 'Friends', icon: Users },
     { id: 'leaderboard' as TabType, label: 'Rank', icon: Trophy },
@@ -26,8 +27,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#0C0D14]/95 backdrop-blur-xl border-t border-white/10 px-3 py-2 pb-safe">
-      <div className="max-w-md mx-auto flex items-center justify-around">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#0C0D14]/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 pb-safe">
+      <div className="max-w-md mx-auto flex items-center justify-around gap-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;
@@ -36,7 +37,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
             <button
               key={tab.id}
               onClick={() => handleTabClick(tab.id)}
-              className="relative flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors focus:outline-none"
+              className="relative flex flex-col items-center justify-center py-1 px-1 flex-1 min-w-0 transition-colors focus:outline-none"
             >
               {isActive && (
                 <motion.div
