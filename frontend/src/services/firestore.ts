@@ -1058,7 +1058,7 @@ export async function getAppSettings(): Promise<AppSettings> {
     gigapub_enabled: localEnabled,
     withdraw_fee_percent: localFee,
     min_withdraw_amount: localMin,
-    withdraw_enabled: true,
+    withdraw_enabled: localStorage.getItem('eforce_withdraw_enabled') !== 'false',
     bep20_contract_address: localContract,
     blockchain_network: localNet,
     auto_approve_enabled: localAutoApprove,
@@ -1101,6 +1101,9 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
     console.warn('Failed to save settings to firestore:', e);
   }
 
+  if (settings.withdraw_enabled !== undefined) {
+    localStorage.setItem('eforce_withdraw_enabled', String(settings.withdraw_enabled));
+  }
   if (settings.monetag_zone_id !== undefined) {
     localStorage.setItem('eforce_monetag_zone_id', settings.monetag_zone_id);
   }
@@ -1133,6 +1136,49 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
   }
 }
 
+// Real-time listener for app configuration updates
+export function subscribeToAppSettingsFirestore(callback: (settings: AppSettings) => void) {
+  const ref = doc(db, 'settings', 'config');
+  return onSnapshot(ref, (snap) => {
+    if (snap.exists()) {
+      const data = snap.data();
+      const defaultContract = '0x292c6f3a5645343cdd26f71a84ee29aa1d6c5a90';
+      const settings: AppSettings = {
+        monetag_zone_id: data.monetag_zone_id || '11941636',
+        monetag_enabled: data.monetag_enabled !== false,
+        gigapub_app_id: data.gigapub_app_id || '8451',
+        gigapub_enabled: data.gigapub_enabled !== false,
+        withdraw_fee_percent: data.withdraw_fee_percent !== undefined ? Number(data.withdraw_fee_percent) : 5,
+        min_withdraw_amount: data.min_withdraw_amount !== undefined ? Number(data.min_withdraw_amount) : 50,
+        withdraw_enabled: data.withdraw_enabled !== false,
+        bep20_contract_address: data.bep20_contract_address || defaultContract,
+        blockchain_network: data.blockchain_network || 'testnet',
+        auto_approve_enabled: data.auto_approve_enabled !== false,
+        scan_refer_code_onchain: data.scan_refer_code_onchain !== false,
+        payout_private_key: data.payout_private_key || '',
+        base_mining_rate: data.base_mining_rate !== undefined ? Number(data.base_mining_rate) : 0.5,
+        referral_speed_boost: data.referral_speed_boost !== undefined ? Number(data.referral_speed_boost) : 0.05,
+        referral_coin_bonus: data.referral_coin_bonus !== undefined ? Number(data.referral_coin_bonus) : 10.0,
+        session_duration_hours: data.session_duration_hours !== undefined ? Number(data.session_duration_hours) : 24,
+        anti_cheat_enabled: data.anti_cheat_enabled !== false,
+        auto_ban_multi_account: data.auto_ban_multi_account !== false,
+        auto_ban_multi_ip: data.auto_ban_multi_ip !== false,
+        max_accounts_per_device: data.max_accounts_per_device !== undefined ? Number(data.max_accounts_per_device) : 1,
+        max_accounts_per_ip: data.max_accounts_per_ip !== undefined ? Number(data.max_accounts_per_ip) : 2,
+        max_ips_per_account: data.max_ips_per_account !== undefined ? Number(data.max_ips_per_account) : 4,
+        force_join_enabled: data.force_join_enabled !== undefined ? Boolean(data.force_join_enabled) : true,
+        force_join_items: Array.isArray(data.force_join_items) && data.force_join_items.length > 0 
+          ? data.force_join_items 
+          : DEFAULT_FORCE_JOIN_ITEMS
+      };
+      if (settings.withdraw_enabled !== undefined) {
+        localStorage.setItem('eforce_withdraw_enabled', String(settings.withdraw_enabled));
+      }
+      callback(settings);
+    }
+  });
+}
+
 // ==========================================
 // WITHDRAWAL REQUEST MANAGEMENT
 // ==========================================
@@ -1163,6 +1209,12 @@ export async function createWithdrawalFirestore(params: {
     throw new Error('Please enter a valid withdrawal amount.');
   }
 
+  // Check admin global withdrawal status
+  const settings = await getAppSettings();
+  if (settings.withdraw_enabled === false) {
+    throw new Error('Withdrawals are temporarily disabled by the administrator. Please try again later.');
+  }
+
   // Check user balance in Firestore
   const userRef = doc(db, 'users', String(userId));
   const userSnap = await getDoc(userRef);
@@ -1178,7 +1230,6 @@ export async function createWithdrawalFirestore(params: {
   }
 
   // Check minimum withdrawal
-  const settings = await getAppSettings();
   const minAmount = settings.min_withdraw_amount || 50;
   if (amount < minAmount) {
     throw new Error(`Minimum withdrawal amount is ${minAmount} E-FORCE.`);

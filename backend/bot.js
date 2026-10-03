@@ -163,6 +163,122 @@ export function initBot() {
       );
     });
 
+    // /withdraw command with admin turn OFF/ON control
+    bot.command('withdraw', async (ctx) => {
+      const from = ctx.from;
+      if (!from) return;
+
+      const userIsAdmin = isAdmin(from.id);
+      const arg = ctx.match ? ctx.match.trim().toLowerCase() : '';
+
+      if (userIsAdmin && (arg === 'off' || arg === 'pause' || arg === 'disable' || arg === 'false')) {
+        await firestoreDB.updateSettings({ withdraw_enabled: false });
+        const kb = new InlineKeyboard().text('🟢 Turn ON Withdrawals', 'admin_withdraw_on');
+        return ctx.reply(
+          `🔴 <b>Withdrawals Disabled / Turned OFF!</b>\n\n` +
+          `User withdrawals have been temporarily paused across the platform.\n` +
+          `Miners will not be able to submit new withdrawal requests until you re-enable it.`,
+          { parse_mode: 'HTML', reply_markup: kb }
+        );
+      }
+
+      if (userIsAdmin && (arg === 'on' || arg === 'resume' || arg === 'enable' || arg === 'true')) {
+        await firestoreDB.updateSettings({ withdraw_enabled: true });
+        const kb = new InlineKeyboard().text('🔴 Turn OFF Withdrawals', 'admin_withdraw_off');
+        return ctx.reply(
+          `🟢 <b>Withdrawals Enabled / Turned ON!</b>\n\n` +
+          `User withdrawals are now active. Miners can submit withdrawal requests to BEP20 addresses.`,
+          { parse_mode: 'HTML', reply_markup: kb }
+        );
+      }
+
+      // Default info / status
+      const settings = await firestoreDB.getSettings();
+      const isEnabled = settings.withdraw_enabled !== false;
+
+      if (userIsAdmin) {
+        const kb = new InlineKeyboard()
+          .text(isEnabled ? '🔴 Turn OFF Withdrawals' : '🟢 Turn ON Withdrawals', isEnabled ? 'admin_withdraw_off' : 'admin_withdraw_on')
+          .row()
+          .webApp('⚡ Open Admin Panel', config.MINI_APP_URL ? `${config.MINI_APP_URL}?admin=true` : 'https://e-force-bot.web.app?admin=true');
+
+        return ctx.reply(
+          `⚙️ <b>Withdrawal Gateway Admin Control:</b>\n\n` +
+          `• <b>Current Status:</b> ${isEnabled ? '🟢 ACTIVE / ENABLED (চালু)' : '🔴 PAUSED / DISABLED (বন্ধ)'}\n` +
+          `• <b>Min Withdrawal:</b> ${settings.min_withdraw_amount || 50} E-FORCE\n` +
+          `• <b>Fee Rate:</b> ${settings.withdraw_fee_percent || 5}%\n\n` +
+          `Tap the button below or use:\n` +
+          `<code>/withdraw off</code> - To pause withdrawals\n` +
+          `<code>/withdraw on</code> - To resume withdrawals`,
+          { parse_mode: 'HTML', reply_markup: kb }
+        );
+      } else {
+        const webAppUrl = config.MINI_APP_URL || 'https://e-force-bot.web.app';
+        const kb = new InlineKeyboard().webApp('💳 Open Withdrawal Page', webAppUrl);
+        return ctx.reply(
+          `💳 <b>E-FORCE Withdrawal Status:</b>\n\n` +
+          `• <b>Status:</b> ${isEnabled ? '🟢 Withdrawals Active' : '🔴 Withdrawals Temporarily Paused by Admin'}\n` +
+          `• <b>Minimum Payout:</b> ${settings.min_withdraw_amount || 50} E-FORCE\n` +
+          `• <b>Network:</b> BSC (BEP20)\n\n` +
+          (isEnabled 
+            ? `You can request a withdrawal directly inside the Mini App:` 
+            : `⚠️ Withdrawals are temporarily paused for maintenance/review. Please check back later.`),
+          { parse_mode: 'HTML', reply_markup: kb }
+        );
+      }
+    });
+
+    bot.command('withdraw_off', async (ctx) => {
+      if (!ctx.from || !isAdmin(ctx.from.id)) return;
+      await firestoreDB.updateSettings({ withdraw_enabled: false });
+      const kb = new InlineKeyboard().text('🟢 Turn ON Withdrawals', 'admin_withdraw_on');
+      return ctx.reply(
+        `🔴 <b>Withdrawals Disabled / Turned OFF!</b>\n\n` +
+        `User withdrawals have been paused. Miners cannot submit new withdrawal requests.`,
+        { parse_mode: 'HTML', reply_markup: kb }
+      );
+    });
+
+    bot.command('withdraw_on', async (ctx) => {
+      if (!ctx.from || !isAdmin(ctx.from.id)) return;
+      await firestoreDB.updateSettings({ withdraw_enabled: true });
+      const kb = new InlineKeyboard().text('🔴 Turn OFF Withdrawals', 'admin_withdraw_off');
+      return ctx.reply(
+        `🟢 <b>Withdrawals Enabled / Turned ON!</b>\n\n` +
+        `User withdrawals are now live. Miners can submit withdrawal requests.`,
+        { parse_mode: 'HTML', reply_markup: kb }
+      );
+    });
+
+    // Callback query handler for admin inline toggle
+    bot.callbackQuery(/^admin_withdraw_(on|off)$/, async (ctx) => {
+      if (!ctx.from || !isAdmin(ctx.from.id)) {
+        return ctx.answerCallbackQuery({ text: 'Access denied: Admin only!', show_alert: true });
+      }
+
+      const turnOn = ctx.match[1] === 'on';
+      await firestoreDB.updateSettings({ withdraw_enabled: turnOn });
+
+      await ctx.answerCallbackQuery({ 
+        text: turnOn ? '🟢 Withdrawals ENABLED!' : '🔴 Withdrawals DISABLED!', 
+        show_alert: false 
+      });
+
+      const kb = new InlineKeyboard()
+        .text(turnOn ? '🔴 Turn OFF Withdrawals' : '🟢 Turn ON Withdrawals', turnOn ? 'admin_withdraw_off' : 'admin_withdraw_on')
+        .row()
+        .webApp('⚡ Open Admin Panel', config.MINI_APP_URL ? `${config.MINI_APP_URL}?admin=true` : 'https://e-force-bot.web.app?admin=true');
+
+      try {
+        await ctx.editMessageText(
+          `⚙️ <b>Withdrawal Gateway Admin Control:</b>\n\n` +
+          `• <b>Current Status:</b> ${turnOn ? '🟢 ACTIVE / ENABLED (চালু)' : '🔴 PAUSED / DISABLED (বন্ধ)'}\n\n` +
+          `Status updated live across the platform and Telegram bot.`,
+          { parse_mode: 'HTML', reply_markup: kb }
+        );
+      } catch (_) {}
+    });
+
     // Launch bot
     bot.start({
       onStart: (botInfo) => {

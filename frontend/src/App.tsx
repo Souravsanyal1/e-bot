@@ -23,6 +23,7 @@ import {
   getLeaderboardFirestore, 
   subscribeToUserFirestore,
   getAppSettings,
+  subscribeToAppSettingsFirestore,
   DEFAULT_FORCE_JOIN_ITEMS,
   type AppSettings
 } from './services/firestore';
@@ -68,8 +69,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     tg.init();
 
-    // Load initial app settings
+    // Load initial app settings & real-time updates
     getAppSettings().then(setAppSettings).catch(() => {});
+    const unsubSettings = subscribeToAppSettingsFirestore(setAppSettings);
 
     // Check referral query param
     const searchParams = new URLSearchParams(window.location.search);
@@ -113,6 +115,10 @@ export const App: React.FC = () => {
     initMonetag();
 
     syncUserData(parsedRefId);
+
+    return () => {
+      if (typeof unsubSettings === 'function') unsubSettings();
+    };
   }, []);
 
   const syncUserData = async (refId?: number, forceAdmin?: boolean) => {

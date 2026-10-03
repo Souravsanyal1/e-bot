@@ -6,7 +6,7 @@ import {
   ExternalLink, Ban, Sparkles, MessageSquare,
   Sliders, Wallet, Copy, Check, XCircle, Clock,
   Eye, EyeOff, Cpu, Play, TrendingUp, Gauge,
-  ShieldCheck, Network, Smartphone, Lock
+  ShieldCheck, Network, Smartphone, Lock, Power
 } from 'lucide-react';
 import { 
   getAdminStatsFirestore, 
@@ -70,6 +70,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
   const [showPrivateKey, setShowPrivateKey] = useState<boolean>(false);
   const [savingWithdrawConfig, setSavingWithdrawConfig] = useState(false);
   const [withdrawConfigSaved, setWithdrawConfigSaved] = useState(false);
+  const [savingWithdrawToggle, setSavingWithdrawToggle] = useState(false);
   const [batchScanning, setBatchScanning] = useState<boolean>(false);
   const [batchScanMessage, setBatchScanMessage] = useState<string | null>(null);
 
@@ -300,11 +301,40 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
         payout_private_key: payoutPrivateKey.trim()
       });
       setWithdrawConfigSaved(true);
+      if (onSettingsUpdated) {
+        onSettingsUpdated(await getAppSettings());
+      }
       setTimeout(() => setWithdrawConfigSaved(false), 3000);
     } catch (err: any) {
       alert('Error saving withdrawal settings: ' + err.message);
     } finally {
       setSavingWithdrawConfig(false);
+    }
+  };
+
+  // Instant master toggle to enable or disable withdrawals for all users
+  const handleToggleWithdrawStatus = async () => {
+    const newStatus = !withdrawEnabled;
+    const confirmMsg = newStatus 
+      ? 'Are you sure you want to ENABLE user withdrawals? Miners will be able to submit new withdrawal requests.' 
+      : 'Are you sure you want to TURN OFF user withdrawals? All miners will be blocked from submitting withdrawal requests immediately.';
+    
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    setSavingWithdrawToggle(true);
+    try {
+      await updateAppSettings({ withdraw_enabled: newStatus });
+      setWithdrawEnabled(newStatus);
+      if (onSettingsUpdated) {
+        onSettingsUpdated(await getAppSettings());
+      }
+      alert(`Withdrawal gateway is now ${newStatus ? 'ENABLED 🟢 (উইথড্র চালু হয়েছে)' : 'TURNED OFF / PAUSED 🔴 (উইথড্র বন্ধ করা হয়েছে)'}.`);
+    } catch (err: any) {
+      alert('Failed to update withdrawal status: ' + (err?.message || err));
+    } finally {
+      setSavingWithdrawToggle(false);
     }
   };
 
@@ -1815,6 +1845,59 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                   <CheckCircle2 size={13} />
                   <span>Paid: {withdrawals.filter(w => w.status === 'completed').reduce((s, w) => s + w.net_amount, 0).toFixed(2)} E-FORCE</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Quick Master Withdrawal Gate Control */}
+            <div className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+              withdrawEnabled 
+                ? 'bg-emerald-500/10 border-emerald-500/30' 
+                : 'bg-red-500/15 border-red-500/40 shadow-[0_0_25px_rgba(239,68,68,0.2)]'
+            }`}>
+              <div className="flex items-center gap-3.5">
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                  withdrawEnabled ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/25 text-red-400'
+                }`}>
+                  <Power size={22} className={withdrawEnabled ? '' : 'animate-pulse'} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-white">Withdrawal System Gateway:</span>
+                    <span className={`text-xs px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                      withdrawEnabled 
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                        : 'bg-red-500/30 text-red-300 border border-red-500/50'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${withdrawEnabled ? 'bg-emerald-400' : 'bg-red-400 animate-ping'}`} />
+                      {withdrawEnabled ? 'ONLINE / ENABLED (চালু)' : 'OFFLINE / DISABLED (বন্ধ)'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {withdrawEnabled
+                      ? 'Miners can freely submit withdrawal requests. Tap "Turn OFF" to pause all new user withdrawals.'
+                      : '⚠️ User withdrawals are currently BLOCKED. Miners see a notice that withdrawals are temporarily disabled.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={savingWithdrawToggle}
+                  onClick={handleToggleWithdrawStatus}
+                  className={`px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg active:scale-95 ${
+                    withdrawEnabled
+                      ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
+                      : 'bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold shadow-emerald-500/30'
+                  }`}
+                >
+                  {savingWithdrawToggle ? (
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Power size={15} />
+                  )}
+                  <span>{withdrawEnabled ? 'Turn OFF Withdrawals (উইথড্র বন্ধ করুন)' : 'Turn ON Withdrawals (উইথড্র চালু করুন)'}</span>
+                </button>
               </div>
             </div>
 

@@ -227,5 +227,27 @@ export const firestoreDB = {
       }
     }
     return { success: true };
+  },
+
+  // --- APP SETTINGS ---
+  async getSettings() {
+    try {
+      const snap = await getDoc(doc(firestore, 'settings', 'config'));
+      return snap.exists() ? snap.data() : {};
+    } catch (e) {
+      console.warn('Firestore getSettings error:', e.message);
+      return {};
+    }
+  },
+
+  async updateSettings(settings) {
+    try {
+      const ref = doc(firestore, 'settings', 'config');
+      await setDoc(ref, settings, { merge: true });
+      return this.getSettings();
+    } catch (e) {
+      console.warn('Firestore updateSettings error:', e.message);
+      throw e;
+    }
   }
 };

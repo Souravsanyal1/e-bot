@@ -8,7 +8,8 @@ import {
 import { 
   createWithdrawalFirestore, 
   getUserWithdrawalsFirestore, 
-  getAppSettings 
+  getAppSettings,
+  subscribeToAppSettingsFirestore
 } from '../services/firestore';
 import { NETWORKS } from '../services/blockchain';
 import { tg } from '../services/telegram';
@@ -82,12 +83,24 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
     }
   }, [walletAddress]);
 
-  // Load Settings & User History
+  // Load Settings & User History with real-time subscription
   useEffect(() => {
     loadSettings();
+    const unsubscribe = subscribeToAppSettingsFirestore((cfg) => {
+      if (cfg.withdraw_fee_percent !== undefined) setFeePercent(cfg.withdraw_fee_percent);
+      if (cfg.min_withdraw_amount !== undefined) setMinAmount(cfg.min_withdraw_amount);
+      if (cfg.withdraw_enabled !== undefined) setWithdrawEnabled(cfg.withdraw_enabled);
+      if (cfg.bep20_contract_address) setContractAddress(cfg.bep20_contract_address);
+      if (cfg.blockchain_network) setNetwork(cfg.blockchain_network);
+    });
+
     if (user?.id) {
       loadHistory();
     }
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, [user?.id]);
 
   const loadSettings = async () => {
@@ -276,11 +289,22 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
               </div>
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <h2 className="text-base sm:text-lg font-black text-white tracking-tight">WITHDRAWAL</h2>
                 <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
                   BEP20
                 </span>
+                {withdrawEnabled ? (
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    OPEN
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/25 text-red-300 border border-red-500/40 flex items-center gap-1 shrink-0 animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                    PAUSED BY ADMIN
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-gray-400 truncate">Direct payout to BNB Smart Chain</p>
             </div>
@@ -330,6 +354,24 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
 
       {/* Withdrawal Form */}
       <form onSubmit={handleSubmit} className="glass-panel p-5 rounded-2xl border border-white/10 space-y-4">
+        {/* Prominent Warning Banner if Admin Turned Withdrawals OFF */}
+        {!withdrawEnabled && (
+          <div className="p-4 rounded-xl bg-gradient-to-r from-red-950/40 via-red-900/20 to-red-950/40 border border-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.15)] flex items-start gap-3 text-red-200">
+            <div className="p-2 rounded-xl bg-red-500/20 text-red-400 shrink-0 mt-0.5">
+              <AlertCircle size={20} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                <span>Withdrawals Temporarily Paused by Admin</span>
+                <span className="text-[10px] text-red-300 font-normal">(উইথড্র সাময়িকভাবে বন্ধ আছে)</span>
+              </h4>
+              <p className="text-[11px] text-gray-300 leading-relaxed">
+                The administrator has temporarily paused new withdrawal requests. Your mined tokens remain safe in your wallet balance. Submissions will be re-enabled soon.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Field 1: BEP20 Wallet Address */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
@@ -339,8 +381,13 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
             </label>
             <button
               type="button"
+              disabled={!withdrawEnabled}
               onClick={handlePasteAddress}
-              className="text-[11px] font-bold text-brand-orange hover:text-orange-400 flex items-center gap-1 px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 active:scale-95 transition-all"
+              className={`text-[11px] font-bold flex items-center gap-1 px-2 py-0.5 rounded transition-all ${
+                !withdrawEnabled
+                  ? 'text-gray-500 bg-white/5 border border-white/10 cursor-not-allowed'
+                  : 'text-brand-orange hover:text-orange-400 bg-orange-500/10 border border-orange-500/20 active:scale-95'
+              }`}
             >
               <Copy size={11} /> Paste
             </button>
@@ -348,11 +395,14 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
           <div className="relative">
             <input
               type="text"
+              disabled={!withdrawEnabled}
               value={walletAddress}
               onChange={(e) => handleAddressChange(e.target.value)}
               placeholder="0x..."
               className={`w-full bg-[#0E0F16] border rounded-xl px-3.5 py-3 text-xs font-mono text-white placeholder-gray-600 focus:outline-none transition-all ${
-                walletAddress.length > 0
+                !withdrawEnabled
+                  ? 'border-white/5 text-gray-500 cursor-not-allowed bg-black/40'
+                  : walletAddress.length > 0
                   ? isValidAddress
                     ? 'border-emerald-500/60 focus:border-emerald-500'
                     : 'border-red-500/60 focus:border-red-500'
@@ -393,12 +443,15 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
           <div className="relative">
             <input
               type="text"
+              disabled={!withdrawEnabled}
               maxLength={6}
               value={referCode}
               onChange={(e) => setReferCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="e.g. 849201"
               className={`w-full bg-[#0E0F16] border rounded-xl px-3.5 py-3 text-sm font-mono tracking-widest text-center font-bold text-white placeholder-gray-600 focus:outline-none transition-all ${
-                referCode.length > 0
+                !withdrawEnabled
+                  ? 'border-white/5 text-gray-500 cursor-not-allowed bg-black/40'
+                  : referCode.length > 0
                   ? isValidCode
                     ? 'border-emerald-500/60 focus:border-emerald-500 text-emerald-300'
                     : 'border-red-500/60 focus:border-red-500'
@@ -433,16 +486,26 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
                 <button
                   key={pct}
                   type="button"
+                  disabled={!withdrawEnabled}
                   onClick={() => handlePercentClick(pct)}
-                  className="text-[10px] font-bold text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 px-2 py-0.5 rounded border border-white/5 active:scale-95 transition-all"
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                    !withdrawEnabled
+                      ? 'text-gray-600 bg-white/5 border-white/5 cursor-not-allowed'
+                      : 'text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 border-white/5 active:scale-95'
+                  }`}
                 >
                   {pct}%
                 </button>
               ))}
               <button
                 type="button"
+                disabled={!withdrawEnabled}
                 onClick={handleMaxClick}
-                className="text-[10px] font-extrabold text-brand-orange bg-brand-orange/15 hover:bg-brand-orange/25 px-2 py-0.5 rounded border border-brand-orange/30 active:scale-95 transition-all"
+                className={`text-[10px] font-extrabold px-2 py-0.5 rounded border transition-all ${
+                  !withdrawEnabled
+                    ? 'text-gray-600 bg-white/5 border-white/5 cursor-not-allowed'
+                    : 'text-brand-orange bg-brand-orange/15 hover:bg-brand-orange/25 border-brand-orange/30 active:scale-95'
+                }`}
               >
                 MAX
               </button>
@@ -451,12 +514,17 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
           <div className="relative">
             <input
               type="number"
+              disabled={!withdrawEnabled}
               step="any"
               min={minAmount}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder={`Min ${minAmount}`}
-              className="w-full bg-[#0E0F16] border border-white/10 focus:border-brand-orange rounded-xl px-3.5 py-3 text-sm font-mono font-bold text-white placeholder-gray-600 focus:outline-none transition-all pr-20"
+              className={`w-full bg-[#0E0F16] border rounded-xl px-3.5 py-3 text-sm font-mono font-bold text-white placeholder-gray-600 focus:outline-none transition-all pr-20 ${
+                !withdrawEnabled
+                  ? 'border-white/5 text-gray-500 cursor-not-allowed bg-black/40'
+                  : 'border-white/10 focus:border-brand-orange'
+              }`}
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-brand-orange">
               E-FORCE
@@ -521,12 +589,19 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
           type="submit"
           disabled={submitting || !isValidAddress || !isValidCode || !isAmountValid || !withdrawEnabled}
           className={`w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
-            submitting || !isValidAddress || !isValidCode || !isAmountValid || !withdrawEnabled
+            !withdrawEnabled
+              ? 'bg-red-500/15 text-red-300 border border-red-500/40 cursor-not-allowed shadow-[0_0_15px_rgba(239,68,68,0.15)]'
+              : submitting || !isValidAddress || !isValidCode || !isAmountValid
               ? 'bg-white/10 text-gray-500 cursor-not-allowed border border-white/5'
               : 'bg-gradient-to-r from-brand-orange via-orange-500 to-amber-500 text-black shadow-orange-glow active:scale-[0.98]'
           }`}
         >
-          {submitting ? (
+          {!withdrawEnabled ? (
+            <>
+              <AlertCircle size={16} className="text-red-400" />
+              <span>Withdrawals Disabled by Admin (উইথড্র বন্ধ আছে)</span>
+            </>
+          ) : submitting ? (
             <>
               <RefreshCw size={16} className="animate-spin text-black" />
               <span>Submitting Request...</span>
