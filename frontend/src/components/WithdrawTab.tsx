@@ -160,12 +160,6 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
     }
   };
 
-  const handleRegenerateCode = () => {
-    tg.haptic.impact('light');
-    const randomCode = String(Math.floor(100000 + Math.random() * 900000));
-    setReferCode(randomCode);
-  };
-
   const parsedAmount = parseFloat(amount) || 0;
   const calculatedFee = (parsedAmount * feePercent) / 100;
   const netReceived = Math.max(0, parsedAmount - calculatedFee);
@@ -394,14 +388,6 @@ export const WithdrawTab: React.FC<WithdrawTabProps> = ({ user, onBalanceUpdate 
                   <CheckCircle2 size={11} /> Auto-Generated
                 </span>
               )}
-              <button
-                type="button"
-                onClick={handleRegenerateCode}
-                className="text-[11px] font-bold text-brand-orange hover:text-orange-400 flex items-center gap-1 px-2.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
-                title="Generate new 6-digit code"
-              >
-                <Sparkles size={11} /> Generate
-              </button>
             </div>
           </div>
           <div className="relative">
