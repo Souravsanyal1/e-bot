@@ -13,8 +13,8 @@ export const Navbar: React.FC<NavbarProps> = ({ user, activeSpeed }) => {
     <header className="sticky top-0 z-40 w-full px-4 py-3 bg-[#0A0A0F]/85 backdrop-blur-md border-b border-white/10">
       <div className="max-w-md mx-auto flex items-center justify-between">
         {/* Brand & User Identity */}
-        <div className="flex items-center gap-3 select-none">
-          <div className="relative w-10 h-10 rounded-xl overflow-hidden p-[1px] bg-gradient-to-tr from-brand-orange to-white/40 shadow-orange-glow">
+        <div className="flex items-center gap-3 select-none flex-1 min-w-0 mr-2">
+          <div className="relative w-10 h-10 rounded-xl overflow-hidden p-[1px] bg-gradient-to-tr from-brand-orange to-white/40 shadow-orange-glow shrink-0">
             <div className="w-full h-full bg-[#12131A] rounded-[11px] flex items-center justify-center overflow-hidden">
               <video 
                 src="/Change_video_logo_background_colors_20261002102002.mp4" 
@@ -26,13 +26,13 @@ export const Navbar: React.FC<NavbarProps> = ({ user, activeSpeed }) => {
               />
             </div>
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-sm tracking-wide text-white">E-FORCE</span>
             </div>
-            <div className="text-[11px] text-gray-400 flex items-center gap-1">
-              <span>{user?.first_name || 'Miner'}</span>
-              {user?.username && <span className="text-gray-500">@{user.username}</span>}
+            <div className="text-[11px] text-gray-400 flex items-center gap-1.5 truncate">
+              <span className="truncate max-w-[120px] text-gray-300 font-medium">{user?.first_name || 'Miner'}</span>
+              {user?.username && <span className="text-gray-500 shrink-0">@{user.username}</span>}
             </div>
           </div>
         </div>

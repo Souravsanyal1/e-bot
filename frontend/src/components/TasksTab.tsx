@@ -201,36 +201,46 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                 key={task.id}
                 whileTap={task.is_completed && !task.ad_required ? {} : { scale: 0.98 }}
                 onClick={() => handleTaskClick(task)}
-                className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
+                className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
                   task.is_completed && !task.ad_required
                     ? 'bg-white/5 border-white/10 opacity-60'
                     : 'bg-gradient-to-r from-orange-500/15 via-[#181826] to-[#12131A] border-orange-500/40 shadow-sm hover:border-orange-400'
                 }`}
               >
-                <div className="flex items-center gap-3 pr-2">
-                  <TaskBadgeIcon task={task} />
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <div className="shrink-0 mt-0.5">
+                    <TaskBadgeIcon task={task} />
+                  </div>
 
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <h4 className="text-xs font-bold text-white line-clamp-1">{task.title}</h4>
-                      {task.ad_required && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-red-500/20 text-red-400 border border-red-500/30">
+                  <div className="flex-1 min-w-0">
+                    {task.ad_required && (
+                      <div className="mb-1">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/30">
                           SPONSORED AD
                         </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">{task.description}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] font-bold text-white">+{task.reward_coins} Coins</span>
-                      <span className="text-[11px] font-extrabold text-brand-orange flex items-center gap-0.5">
-                        <Zap size={10} /> +{task.speed_boost}/hr
+                      </div>
+                    )}
+                    <h4 className="text-xs font-bold text-white leading-snug line-clamp-2">
+                      {task.title}
+                    </h4>
+                    {task.description && (
+                      <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5 leading-tight">
+                        {task.description}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className="text-[11px] font-bold text-white bg-white/5 px-2 py-0.5 rounded-md border border-white/10">
+                        +{task.reward_coins} Coins
+                      </span>
+                      <span className="text-[11px] font-extrabold text-brand-orange flex items-center gap-0.5 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20">
+                        <Zap size={10} className="fill-brand-orange" /> +{task.speed_boost}/hr
                       </span>
                     </div>
                   </div>
                 </div>
 
                 {/* Status CTA */}
-                <div className="shrink-0">
+                <div className="shrink-0 self-center">
                   {task.is_completed && !task.ad_required ? (
                     <div className="flex items-center gap-1 text-green-400 font-bold text-xs bg-green-500/10 px-2.5 py-1 rounded-xl border border-green-500/20">
                       <CheckCircle2 size={14} /> Done
@@ -278,36 +288,47 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                 key={task.id}
                 whileTap={task.is_completed && !task.ad_required ? {} : { scale: 0.98 }}
                 onClick={() => handleTaskClick(task)}
-                className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
+                className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
                   task.is_completed && !task.ad_required
                     ? 'bg-white/5 border-white/10 opacity-60'
                     : 'bg-[#12131A] border-white/10 hover:border-white/20'
                 }`}
               >
-                <div className="flex items-center gap-3 pr-2">
-                  <TaskBadgeIcon task={task} />
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <div className="shrink-0 mt-0.5">
+                    <TaskBadgeIcon task={task} />
+                  </div>
 
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <h4 className="text-xs font-bold text-white line-clamp-1">{task.title}</h4>
-                      {task.ad_required && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-orange-500/20 text-orange-400">
+                  <div className="flex-1 min-w-0">
+                    {task.ad_required && (
+                      <div className="mb-1">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-orange-500/20 text-orange-400 border border-orange-500/30">
                           SPONSORED AD
                         </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] font-bold text-gray-300">+{task.reward_coins} Coins</span>
-                      <span className="text-[11px] font-bold text-orange-400 flex items-center gap-0.5">
-                        <Zap size={10} /> +{task.speed_boost}/hr
+                      </div>
+                    )}
+                    <h4 className="text-xs font-bold text-white leading-snug line-clamp-2">
+                      {task.title}
+                    </h4>
+                    {task.description && (
+                      <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5 leading-tight">
+                        {task.description}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className="text-[11px] font-bold text-gray-300 bg-white/5 px-2 py-0.5 rounded-md border border-white/10">
+                        +{task.reward_coins} Coins
+                      </span>
+                      <span className="text-[11px] font-bold text-orange-400 flex items-center gap-0.5 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20">
+                        <Zap size={10} className="fill-orange-400" /> +{task.speed_boost}/hr
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="shrink-0">
+                <div className="shrink-0 self-center">
                   {task.is_completed && !task.ad_required ? (
-                    <div className="flex items-center gap-1 text-green-400 font-bold text-xs bg-green-500/10 px-2 py-1 rounded-xl">
+                    <div className="flex items-center gap-1 text-green-400 font-bold text-xs bg-green-500/10 px-2.5 py-1 rounded-xl border border-green-500/20">
                       <CheckCircle2 size={13} /> Done
                     </div>
                   ) : (
