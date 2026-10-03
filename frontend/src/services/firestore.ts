@@ -243,8 +243,8 @@ export async function processReferralReward(
         `🎉 <b>New Referral Joined!</b>\n\n` +
         `<b>${referredUser.first_name || 'Miner'}</b> (@${referredUser.username || 'hidden'}) just started mining using your link!\n\n` +
         `⚡ <b>Rewards Unlocked:</b>\n` +
-        `• +${configuredRefBoost} E-FORCE/hr Mining Speed Boost\n` +
-        `• +${configuredRefBonus} E-FORCE Instant Bonus\n\n` +
+        `• +${configuredRefBoost} PTS/hr Mining Speed Boost\n` +
+        `• +${configuredRefBonus} Points Instant Bonus\n\n` +
         `Keep sharing to accelerate your 24H mining output! 🚀`;
 
       fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {

@@ -323,25 +323,25 @@ export const MiningTab: React.FC<MiningTabProps> = ({
             <h3 className="text-sm font-bold text-white">Engine Power Breakdown</h3>
           </div>
           <span className="text-xs font-mono font-bold text-orange-400">
-            {currentSpeed.toFixed(2)} /hr
+            {currentSpeed.toFixed(2)} PTS/hr
           </span>
         </div>
 
         <div className="space-y-2 text-xs">
           <div className="flex justify-between text-gray-400">
             <span>Base {sessionHours}H Rate:</span>
-            <span className="text-white font-medium">{baseRate.toFixed(2)} E-FORCE/hr</span>
+            <span className="text-white font-medium">{baseRate.toFixed(2)} PTS/hr</span>
           </div>
           <div className="flex justify-between text-gray-400">
             <span>Tasks Completed Boost:</span>
             <span className="text-orange-400 font-medium">
-              +{totalTasksBoost.toFixed(2)}/hr
+              +{totalTasksBoost.toFixed(2)} PTS/hr
             </span>
           </div>
           <div className="flex justify-between text-gray-400">
             <span>Referrals Boost ({referralCount} friends):</span>
             <span className="text-green-400 font-medium">
-              +{totalRefBoost.toFixed(2)}/hr
+              +{totalRefBoost.toFixed(2)} PTS/hr
             </span>
           </div>
         </div>
@@ -359,7 +359,7 @@ export const MiningTab: React.FC<MiningTabProps> = ({
             onClick={onNavigateToFriends}
             className="py-2.5 px-3 rounded-xl bg-white/10 border border-white/15 text-xs font-bold text-white hover:bg-white/15 transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
           >
-            <span>Invite Friends (+{refBoostRate.toFixed(2)})</span>
+            <span>Invite Friends (+{refBoostRate.toFixed(2)}/hr)</span>
           </button>
         </div>
       </div>

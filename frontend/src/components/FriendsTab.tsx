@@ -75,7 +75,7 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals, appSettings }
     tg.haptic.impact('heavy');
     const shareText = encodeURIComponent(
       `⚔️ Join my squad on E-FORCE!\n` +
-      `Start ${sessionHours}-Hour limited mining and get +${refBonusCoins} E-FORCE + mining speed boost on sign-up! 🚀`
+      `Start ${sessionHours}-Hour limited mining and get +${refBonusCoins} POINTS + mining speed boost on sign-up! 🚀`
     );
     const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${shareText}`;
     tg.openTelegramLink(tgShareUrl);
@@ -94,7 +94,7 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals, appSettings }
               Invite Friends & Accelerate Speed
             </h2>
             <p className="text-xs text-gray-300 mt-1">
-              Every active referral grants you <span className="text-brand-orange font-bold">+{refBoostRate.toFixed(2)} E-FORCE/hr</span> boost!
+              Every active referral grants you <span className="text-brand-orange font-bold">+{refBoostRate.toFixed(2)} PTS/hr</span> boost!
             </p>
           </div>
 
@@ -204,7 +204,7 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals, appSettings }
               <Gift size={15} />
             </div>
             <div>
-              <div className="text-xs font-bold text-white">+{refBonusCoins.toFixed(2)} E-FORCE Instant Bonus</div>
+              <div className="text-xs font-bold text-white">+{refBonusCoins.toFixed(2)} Points Instant Bonus</div>
               <div className="text-[11px] text-gray-400">
                 Instantly credited to your balance the moment your friend activates their mini app.
               </div>
@@ -238,8 +238,8 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({ referrals, appSettings }
                 </div>
 
                 <div className="text-right">
-                  <div className="text-xs font-bold text-brand-orange">+{friend.bonus_coins} Coins</div>
-                  <div className="text-[10px] text-green-400 font-semibold">+{friend.speed_boost}/hr Boost</div>
+                  <div className="text-xs font-bold text-brand-orange">+{friend.bonus_coins} Points</div>
+                  <div className="text-[10px] text-green-400 font-semibold">+{friend.speed_boost} PTS/hr Boost</div>
                 </div>
               </div>
             ))}

@@ -1150,7 +1150,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
                       <label className="text-xs text-gray-300 font-bold block flex items-center gap-1.5">
                         <TrendingUp size={14} className="text-brand-orange" />
-                        <span>Base 24H Rate (E-FORCE/hr)</span>
+                        <span>Base 24H Rate (PTS/hr)</span>
                       </label>
                       <input
                         type="number"
@@ -1170,7 +1170,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
                       <label className="text-xs text-gray-300 font-bold block flex items-center gap-1.5">
                         <Zap size={14} className="text-yellow-400" />
-                        <span>Referral Boost (+E-FORCE/hr)</span>
+                        <span>Referral Boost (+PTS/hr)</span>
                       </label>
                       <input
                         type="number"
@@ -1190,7 +1190,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                     <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
                       <label className="text-xs text-gray-300 font-bold block flex items-center gap-1.5">
                         <Coins size={14} className="text-yellow-300" />
-                        <span>Referral Bonus (E-FORCE coins)</span>
+                        <span>Referral Bonus (Points)</span>
                       </label>
                       <input
                         type="number"
@@ -1202,7 +1202,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                         required
                       />
                       <p className="text-[11px] text-gray-400">
-                        Instant token bounty credited to referrer when a friend joins.
+                        Instant points bounty credited to referrer when a friend joins.
                       </p>
                     </div>
 
@@ -1277,7 +1277,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ adminEmail, onExit, onSignOu
                       <div className="flex justify-between text-gray-400 text-[11px]">
                         <span>Base {sessionDurationHours}H Rate:</span>
                         <span className="text-white font-medium">
-                          {(Number(baseMiningRate) || 0.5).toFixed(2)} E-FORCE/hr
+                          {(Number(baseMiningRate) || 0.5).toFixed(2)} PTS/hr
                         </span>
                       </div>
                       <div className="flex justify-between text-gray-400 text-[11px]">
